@@ -1,0 +1,22 @@
+# Blender 5.0.0 Beta MTL File: 'TD_EnemyModels.blend'
+# www.blender.org
+
+newmtl TD_Mat_512x512_Tileable.001
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.010000 0.010000 0.010000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+map_Kd D:/GameDev/GIMP 2/TexturePallete_512x512_MedievalPack.png
+
+newmtl TD_Mat_512x512_Tileable.002
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.010000 0.010000 0.010000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+illum 2
+map_Kd D:/GameDev/GIMP 2/TexturePallete_512x512_MedievalPack.png
+map_d D:/GameDev/GIMP 2/TexturePallete_512x512_MedievalPack.png

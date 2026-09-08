@@ -44,3 +44,12 @@ target_link_libraries(SimpleRenderer
         glad
         glm::glm
 )
+
+# Copy runtime assets next to the executable after building.
+add_custom_command(
+    TARGET SimpleRenderer POST_BUILD
+
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${PROJECT_SOURCE_DIR}/assets"
+        "$<TARGET_FILE_DIR:SimpleRenderer>/assets"
+)
