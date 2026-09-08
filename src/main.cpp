@@ -1,4 +1,4 @@
-//ZEBRA ENGINE
+;//ZEBRA ENGINE
 #include <array>
 #include <vector>
 #include <cstddef>
@@ -125,7 +125,7 @@ namespace
         unsigned int vbo = 0;
         unsigned int ebo = 0;
 
-        GLsizei indexCount = 0;
+        GLsizei indicesCount = 0;
 
         Mesh() = default;
 
@@ -144,14 +144,13 @@ namespace
             vao = other.vao;
             vbo = other.vbo;
             ebo = other.ebo;
-            indexCount = other.indexCount;
+            indicesCount = other.indicesCount;
 
             other.vao = 0;
             other.vbo = 0;
             other.ebo = 0;
-            other.indexCount = 0;
+            other.indicesCount = 0;
         }
-
 
         Mesh& operator=(Mesh&& other) noexcept
         {
@@ -175,12 +174,12 @@ namespace
                 vao = other.vao;
                 vbo = other.vbo;
                 ebo = other.ebo;
-                indexCount = other.indexCount;
+                indicesCount = other.indicesCount;
 
                 other.vao = 0;
                 other.vbo = 0;
                 other.ebo = 0;
-                other.indexCount = 0;
+                other.indicesCount = 0;
             }
 
             return *this;
@@ -365,9 +364,9 @@ namespace
     }};
 
 
-    // -------------------------------------------------
-    // SHADERS
-    // -------------------------------------------------
+// -------------------------------------------------
+// SHADERS
+// -------------------------------------------------
     constexpr const char* VERTEX_SHADER_SOURCE = {R"(
         #version 330 core
 
@@ -460,7 +459,6 @@ namespace
         }
     )"};
 
-
     void FramebufferSizeCallback(GLFWwindow*, int width, int height)
     {
         glViewport(0, 0, width, height);
@@ -489,11 +487,9 @@ namespace
 
         return shader;
     }
-
     unsigned int CreateShaderProgram()
     {
-        const unsigned int vertexShader =
-            CompileShader(GL_VERTEX_SHADER, VERTEX_SHADER_SOURCE);
+        const unsigned int vertexShader = CompileShader(GL_VERTEX_SHADER, VERTEX_SHADER_SOURCE);
 
         if (vertexShader == 0)
             return 0;
@@ -658,6 +654,7 @@ namespace
         };
         return region;
     }
+    
     Texture LoadTexture(const char* filePath)
     {
         Texture texture;
@@ -709,15 +706,15 @@ namespace
         
         glBindTexture( GL_TEXTURE_2D, object.material->texture->id );
         glBindVertexArray( object.mesh->vao );
-        glDrawElements( GL_TRIANGLES, object.mesh->indexCount, GL_UNSIGNED_INT, nullptr );
+        glDrawElements( GL_TRIANGLES, object.mesh->indicesCount, GL_UNSIGNED_INT, nullptr );
     }
 
-    Mesh CreateMesh( const Vertex* vertices, std::size_t vertexCount, const unsigned int* indices, std::size_t indexCount )
+    Mesh CreateMesh( const Vertex* vertices, std::size_t vertexCount, const unsigned int* indices, std::size_t indicesCount )
     {
         Mesh mesh;
-        mesh.indexCount = static_cast<GLsizei>(indexCount);
+        mesh.indicesCount = static_cast<GLsizei>(indicesCount);
         // {
-        //     0, 0, 0, static_cast<GLsizei>(indexCount)
+        //     0, 0, 0, static_cast<GLsizei>(indicesCount)
         // };
 
         glGenVertexArrays( 1, &mesh.vao );
@@ -737,7 +734,7 @@ namespace
         glBindBuffer( GL_ELEMENT_ARRAY_BUFFER, mesh.ebo );
         glBufferData(
             GL_ELEMENT_ARRAY_BUFFER,
-            static_cast<GLsizeiptr>( indexCount * sizeof(unsigned int) ),
+            static_cast<GLsizeiptr>( indicesCount * sizeof(unsigned int) ),
             indices,
             GL_STATIC_DRAW
         );
@@ -757,41 +754,10 @@ namespace
 
         return mesh;
     }
-    void DestroyMesh(Mesh& mesh)
-    {
-        glDeleteVertexArrays(
-            1,
-            &mesh.vao
-        );
 
-        glDeleteBuffers(
-            1,
-            &mesh.vbo
-        );
-
-        glDeleteBuffers(
-            1,
-            &mesh.ebo
-        );
-
-        mesh.vao = 0;
-        mesh.vbo = 0;
-        mesh.ebo = 0;
-        mesh.indexCount = 0;
-    }
-    // void DestroyTexture(Texture& texture)
-    // {
-    //     glDeleteTextures( 1, &texture.id );
-    //     texture.id = 0;
-    //     texture.width = 0;
-    //     texture.height = 0;
-    // }
-    
-    std::unordered_map<std::string, Texture> textureCache;
-
-    // -------------------------------------------------
-    // OBJECT LOADING
-    // -------------------------------------------------
+// -------------------------------------------------
+// OBJECT LOADING
+// -------------------------------------------------
     void BuildObjSubmeshes(ObjData& data)
     {
         for ( std::size_t triangleIndex = 0; triangleIndex < data.triangleMaterials.size(); triangleIndex++ )
@@ -966,10 +932,7 @@ namespace
 
         if (!file)
         {
-            std::cerr
-                << "Failed to open MTL: "
-                << filePath
-                << '\n';
+            std::cerr << "Failed to open MTL: " << filePath << '\n';
 
             return materials;
         }
@@ -997,14 +960,9 @@ namespace
                         ""
                     }
                 );
-
-                currentMaterial =
-                    &materials.back();
+                currentMaterial = &materials.back();
             }
-            else if (
-                prefix == "map_Kd" &&
-                currentMaterial != nullptr
-            )
+            else if ( prefix == "map_Kd" && currentMaterial != nullptr )
             {
                 std::getline(
                     stream >> std::ws,
@@ -1069,10 +1027,9 @@ namespace
 
 int main()
 {
-    
-    // -------------------------------------------------
-    // Window + OpenGL initialization
-    // -------------------------------------------------
+// -------------------------------------------------
+// Window + OpenGL initialization
+// -------------------------------------------------
     if (!glfwInit())
     {
         std::cerr << "Failed to initialize GLFW.\n";
@@ -1103,538 +1060,403 @@ int main()
         return 1;
     }
 
-    std::cout << "Loaded OpenGL "
-              << GLAD_VERSION_MAJOR(version)
-              << '.'
-              << GLAD_VERSION_MINOR(version)
-              << '\n';
-
-    glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
-
-    int framebufferWidth = 0;
-    int framebufferHeight = 0;
-    glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
-    glViewport(0, 0, framebufferWidth, framebufferHeight);
-
-    glfwSwapInterval(1); // 1 = VSync on, 0 = off.
-    
-    bool gWasDown = false; // for spawning "things" on key down
-    bool rWasDown = false; // for de-spawning "things" on key down
-
-    // -------------------------------------------------
-    // LOAD OBJ FILE TEST WITH ORC IMPORT
-    // -------------------------------------------------
-    ObjData orc_Obj = LoadObjData("assets/models/TD_EnemyModels.obj");
-    std::vector<ObjMaterial> objMaterials = LoadMtlData( "assets/models/TD_EnemyModels.mtl" );
-
-    // std::vector<Texture> orcTextures;
-    // orcTextures.reserve( objMaterials.size() );
-
-    std::unordered_map<std::string, Texture> textureCache;
-    stbi_set_flip_vertically_on_load(true);
-
-    std::vector<Material> orcMaterials;
-    orcMaterials.reserve( objMaterials.size() );
-
-    for (const ObjMaterial& objMaterial : objMaterials)
+    std::cout << "Loaded OpenGL " << GLAD_VERSION_MAJOR(version) << '.' << GLAD_VERSION_MINOR(version) << '\n';
+              
+// ---------------------------------------------
+// OPENGL RESOURCE LIFETIME
+// ---------------------------------------------
     {
-        const std::string texturePath = ResolveImportedTexturePath( objMaterial.diffuseTexturePath );
-        const Texture* importedTexture = GetOrLoadTexture( textureCache, texturePath );
+        glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
 
-        if (importedTexture == nullptr)
+        int framebufferWidth = 0;
+        int framebufferHeight = 0;
+        glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
+        glViewport(0, 0, framebufferWidth, framebufferHeight);
+
+        glfwSwapInterval(1); // 1 = VSync on, 0 = off.
+        
+        bool gWasDown = false; // for spawning "things" on key down
+        bool rWasDown = false; // for de-spawning "things" on key down
+
+// -------------------------------------------------
+// LOAD OBJ FILE TEST WITH ORC IMPORT
+// -------------------------------------------------
+        ObjData orc_Obj = LoadObjData("assets/models/TD_EnemyModels.obj");
+        std::vector<ObjMaterial> objMaterials = LoadMtlData( "assets/models/TD_EnemyModels.mtl" );
+
+        // std::vector<Texture> orcTextures;
+        // orcTextures.reserve( objMaterials.size() );
+
+        std::unordered_map<std::string, Texture> textureCache;
+        stbi_set_flip_vertically_on_load(true);
+
+        std::vector<Material> orcMaterials;
+        orcMaterials.reserve( objMaterials.size() );
+
+        for (const ObjMaterial& objMaterial : objMaterials)
         {
-            std::cerr << "Failed to load imported texture: " << texturePath << '\n';
-            return 1;
-        }
+            const std::string texturePath = ResolveImportedTexturePath( objMaterial.diffuseTexturePath );
+            const Texture* importedTexture = GetOrLoadTexture( textureCache, texturePath );
 
-        orcMaterials.push_back(
-            Material
+            if (importedTexture == nullptr)
             {
-                importedTexture,
-
-                glm::vec3(1.0f),
-                1.0f,
-
-                0.2f,
-                16.0f,
-
-                glm::vec2(0.0f),
-                glm::vec2(1.0f),
-                glm::vec2(1.0f)
+                std::cerr << "Failed to load imported texture: " << texturePath << '\n';
+                return 1;
             }
-        );
-    }
-    // for (const ObjMaterial& objMaterial : objMaterials)
-    // {
-    //     const std::string texturePath = ResolveImportedTexturePath( objMaterial.diffuseTexturePath );
 
-    //     Texture loadedTexture = LoadTexture( texturePath.c_str() );
+            orcMaterials.push_back(
+                Material
+                {
+                    importedTexture,
 
-    //     if (loadedTexture.id == 0)
-    //     {
-    //         std::cerr << "Failed to load imported texture: " << texturePath << '\n';
-    //     }
-    //     orcTextures.push_back( loadedTexture );
-    // }
+                    glm::vec3(1.0f),
+                    1.0f,
 
-    // std::vector<Material> orcMaterials;
-    // orcMaterials.reserve( objMaterials.size() );
+                    0.2f,
+                    16.0f,
 
-    // for (std::size_t i = 0; i < objMaterials.size(); ++i)
-    // {
-    //     orcMaterials.push_back(
-    //         Material
-    //         {
-    //             &orcTextures[i],
-
-    //             glm::vec3(1.0f),
-    //             1.0f,
-
-    //             0.2f,
-    //             16.0f,
-
-    //             glm::vec2(0.0f),
-    //             glm::vec2(1.0f),
-    //             glm::vec2(1.0f)
-    //         }
-    //     );
-    // }
-
-    std::vector<Mesh> orcMeshes;
-    orcMeshes.reserve( orc_Obj.submeshes.size() );
-
-    for (const ObjSubmesh& submesh : orc_Obj.submeshes)
-    {
-        orcMeshes.push_back(
-            CreateMesh(
-                submesh.vertices.data(),
-                submesh.vertices.size(),
-                submesh.indices.data(),
-                submesh.indices.size()
-            )
-        );
-    }
-
-    Transform orcTransform
-    {
-        glm::vec3(0.0f, 0.0f, -10.0f),
-        glm::vec3(1.0f),
-
-        0.0f,
-        glm::vec3(0.0f, 1.0f, 0.0f)
-    };
-
-    std::vector<Renderable> orcRenderables;
-    orcRenderables.reserve( orc_Obj.submeshes.size() );
-
-    for (std::size_t i = 0; i < orc_Obj.submeshes.size(); ++i)
-    {
-        const ObjSubmesh& submesh = orc_Obj.submeshes[i];
-
-        const std::size_t materialIndex = FindObjMaterialIndex( objMaterials, submesh.materialName );
-        if (materialIndex == objMaterials.size())
-        {
-            std::cerr << "No runtime material for submesh: " << submesh.materialName << '\n';
-            continue;
+                    glm::vec2(0.0f),
+                    glm::vec2(1.0f),
+                    glm::vec2(1.0f)
+                }
+            );
         }
 
-        orcRenderables.push_back(
-            Renderable
-            {
-                &orcMeshes[i], &orcMaterials[materialIndex], orcTransform
-            }
-        );
-    }
+        std::vector<Mesh> orcMeshes;
+        orcMeshes.reserve( orc_Obj.submeshes.size() );
 
-    // -------------------------------------------------
-    // LOAD TEXTURE AND COOROSPONDING UNIFORM DATA
-    // -------------------------------------------------
-    stbi_set_flip_vertically_on_load(true);
-    const Texture* texture = GetOrLoadTexture(textureCache,"assets/textures/TexturePallete_512x512_MedievalPack.png");
-    const Texture* secondTexture = GetOrLoadTexture( textureCache,"assets/textures/TexturePallete_LowPoly_512x512_MedievalPack.png");
-
-    if (texture->id == 0 || secondTexture->id == 0)
-    {
-        return 1;
-    }
-
-    const AtlasRegion brickRegion = MakeAtlasRegion( 128, 160, 32, 32, texture->width, texture->height );
-    const AtlasRegion woodRegion = MakeAtlasRegion( 160, 256, 32, 32, texture->width, texture->height );
-    const AtlasRegion grassRegion = MakeAtlasRegion( 32, 160, 32, 32,  texture->width, texture->height );
-    const AtlasRegion fireRegion = MakeAtlasRegion( 0, 0, 512, 512,  secondTexture->width, secondTexture->height );
-    const AtlasRegion grassCardRegion = MakeAtlasRegion( 3, 472, 32, 32,  texture->width, texture->height );
-
-    std::cout << "Unique GPU textures: " << textureCache.size() << '\n';
-    // -------------------------------------------------
-    // LIGHT AND CAMERA STATE
-    // -------------------------------------------------
-    float lightAngle = 0.0f;
-    float lightIntensity = 3.0f;
-
-    //camera
-    Camera camera
-    {
-        glm::vec3(0.0f, 6.5f, 5.0f),
-        -90.0f,
-        0.0f
-    };
-    
-    // -------------------------------------------------
-    // Mesh GPU resources
-    // -------------------------------------------------
-    
-    //CUBE MESH
-    Mesh cubeMesh =
-        CreateMesh(
-            CUBE_INDEXED_VERTICES.data(),
-            CUBE_INDEXED_VERTICES.size(),
-            CUBE_INDICES.data(),
-            CUBE_INDICES.size()
-        );
-    //PLANE MESH
-    Mesh planeMesh =
-        CreateMesh(
-            PLANE_VERTICES.data(),
-            PLANE_VERTICES.size(),
-            PLANE_INDICES.data(),
-            PLANE_INDICES.size()
-        );
-    Mesh cardMesh  = 
-        CreateMesh(
-            CARD_VERTICES.data(),
-            CARD_VERTICES.size(),
-            CARD_INDICES.data(),
-            CARD_INDICES.size()
-        );
-    // -------------------------------------------------
-    // Shader program
-    // -------------------------------------------------
-    const unsigned int shaderProgram = CreateShaderProgram();
-    if (shaderProgram == 0)
-    {
-        glDeleteVertexArrays(1, &cubeMesh.vao);
-        glDeleteBuffers(1, &cubeMesh.vbo);
-        glDeleteBuffers(1, &cubeMesh.ebo);
-
-        glDeleteVertexArrays(1, &planeMesh.vao);
-        glDeleteBuffers(1, &planeMesh.vbo);
-        glDeleteBuffers(1, &planeMesh.ebo);
-
-        glDeleteVertexArrays(1, &cardMesh .vao);
-        glDeleteBuffers(1, &cardMesh .vbo);
-        glDeleteBuffers(1, &cardMesh .ebo);
-
-        glfwDestroyWindow(window);
-        glfwTerminate();
-        return 1;
-    }
-    
-    // -------------------------------------------------
-    //UNIFORM LOCATIONS
-    // -------------------------------------------------
-    const int modelLocation =          glGetUniformLocation(shaderProgram, "model");
-    const int viewLocation =           glGetUniformLocation(shaderProgram, "view");
-    const int projectionLocation =     glGetUniformLocation(shaderProgram, "projection");
-    const int lightDirectionLocation = glGetUniformLocation(shaderProgram, "lightDirection");
-    const int lightColorLocation =     glGetUniformLocation(shaderProgram, "lightColor");
-    const int cameraPositionLocation = glGetUniformLocation(shaderProgram, "cameraPosition");
-    const int shininessLocation =       glGetUniformLocation(shaderProgram, "shininess");
-    const int specularStrengthLocation = glGetUniformLocation(shaderProgram, "specularStrength");
-    const int lightIntensityLocation = glGetUniformLocation(shaderProgram, "lightIntensity");
-    const int materialColorLocation = glGetUniformLocation( shaderProgram, "materialColor" );
-    const int textureSamplerLocation = glGetUniformLocation(shaderProgram,"textureSampler" );
-    const int uvOffsetLocation = glGetUniformLocation( shaderProgram, "uvOffset" );
-    const int uvScaleLocation = glGetUniformLocation( shaderProgram, "uvScale" );
-    const int uvTilingLocation = glGetUniformLocation( shaderProgram, "uvTiling" );
-    const int materialOpacityLocation = glGetUniformLocation( shaderProgram, "materialOpacity" );
-    
-    // -------------------------------------------------
-    // Scene state
-    // -------------------------------------------------
-    
-    Material material_brick
-    {
-        texture,
-        
-        glm::vec3(1.0f),
-        1.0f,          // opacity
-
-        .50f,
-        16.0f,
-
-        brickRegion.offset,
-        brickRegion.scale,
-        glm::vec2(1.5f,2.0f)
-    };
-    Material material_wood
-    {
-        texture,
-        
-        glm::vec3(1.0f),
-        1.0f,          // opacity
-
-        0.1f,
-        2.0f,
-
-        woodRegion.offset,
-        woodRegion.scale,
-        glm::vec2(1.0f)
-    };
-    Material material_grass
-    {
-        texture,
-        
-        glm::vec3(1.0f),
-        1.0f,          // opacity
-
-        0.05f,
-        1.0f,
-
-        grassRegion.offset,
-        grassRegion.scale,
-        glm::vec2(5.25f)
-    };
-    Material material_fire
-    {
-        secondTexture,
-
-        glm::vec3(1.0f),
-        1.0f,          // opacity
-
-        1.0f,
-        64.0f,
-
-        fireRegion.offset,
-        fireRegion.scale,
-        glm::vec2(1.0f)
-    };
-    Material material_grass_card
-    {
-        texture,
-
-        glm::vec3(1.0f),
-        0.75f,          // opacity
-
-        1.0f,
-        64.0f,
-
-        grassCardRegion.offset,
-        grassCardRegion.scale,
-        glm::vec2(1.0f)
-    };
-
-    Renderable objectA
-    {
-        &cubeMesh,
-        &material_brick,
-        Transform
+        for (const ObjSubmesh& submesh : orc_Obj.submeshes)
         {
-            glm::vec3(1.5f, 5.0f, -5.0f),
-            glm::vec3(1.25f),
-
-            45.0f,
-            glm::vec3(1.0f, 1.0f, 0.0f)
+            orcMeshes.push_back(
+                CreateMesh(
+                    submesh.vertices.data(),
+                    submesh.vertices.size(),
+                    submesh.indices.data(),
+                    submesh.indices.size()
+                )
+            );
         }
-    };
-    Renderable objectB
-    {
-        &cubeMesh,
-        &material_wood,
-        Transform
+
+        Transform orcTransform
         {
-            glm::vec3(-1.5f, 5.0f, -5.0f),
+            glm::vec3(0.0f, 0.0f, -10.0f),
             glm::vec3(1.0f),
 
             0.0f,
-            glm::vec3(-1.0f, -1.0f, 0.0f)
-        }
-    };
-    Renderable objectC
-    {
-        &planeMesh,
-        &material_grass,
-        Transform
-        {
-            glm::vec3(0.0f, 0.0f, 0.0f),
-            glm::vec3(50.0f, 1.0f, 50.0f),
-
-            0.0f,
             glm::vec3(0.0f, 1.0f, 0.0f)
-        }
-    };
-    Renderable objectD
-    {
-        &cubeMesh,
-        &material_fire,
-        // &cardMesh,
-        // &material_grass_card,
-        Transform
+        };
+
+        std::vector<Renderable> orcRenderables;
+        orcRenderables.reserve( orc_Obj.submeshes.size() );
+
+        for (std::size_t i = 0; i < orc_Obj.submeshes.size(); ++i)
         {
-            glm::vec3(0.0f, 10.0f, 0.0f),
-            glm::vec3(2.5f),
+            const ObjSubmesh& submesh = orc_Obj.submeshes[i];
 
-            0.0f,
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        }
-    };
-    Renderable TowerLeft
-    {
-        &cubeMesh,
-        &material_brick,
-        Transform
-        {
-            glm::vec3(-10.0f, 2.5f, -15.0f),
-            glm::vec3(5.0f),
-
-            0.0f,
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        }
-    };
-    Renderable TowerRight
-    {
-        &cubeMesh,
-        &material_brick,
-        Transform
-        {
-            glm::vec3(5.0f, 2.5f, -15.0f),
-            glm::vec3(5.0f),
-
-            0.0f,
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        }
-    };
-    Renderable Wall_1
-    {
-        &cubeMesh,
-        &material_brick,
-        Transform
-        {
-            glm::vec3(-5.0f, 1.5f, -15.0f),
-            glm::vec3(5.0f, 3.0f, 2.0f),
-
-            0.0f,
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        }
-    };
-    Renderable Wall_2
-    {
-        &cubeMesh,
-        &material_brick,
-        Transform
-        {
-            glm::vec3(0.0f, 1.5f, -15.0f),
-            glm::vec3(5.0f, 3.0f, 2.0f),
-
-            0.0f,
-            glm::vec3(0.0f, 1.0f, 0.0f)
-        }
-    };
-    
-    std::vector<Renderable*> opaqueScene
-    {
-        &objectA,
-        &objectB,
-        &objectC,
-        &objectD,
-        &TowerLeft,
-        &TowerRight,
-        &Wall_1,
-        &Wall_2,
-    };
-
-    std::vector<Renderable> transparentScene;
-    transparentScene.reserve(50);
-    for (int i = 0; i < 10; ++i)
-    {
-        const float x =
-            -10.0f + static_cast<float>(i) * 2.0f;
-
-        transparentScene.push_back(
-            Renderable
+            const std::size_t materialIndex = FindObjMaterialIndex( objMaterials, submesh.materialName );
+            if (materialIndex == objMaterials.size())
             {
-                &cardMesh,
-                &material_grass_card,
-
-                Transform
-                {
-                    glm::vec3(x, .5f, -8.0f),
-                    glm::vec3(1.0f),
-
-                    0.0f,
-                    glm::vec3(0.0f, 1.0f, 0.0f)
-                }
+                std::cerr << "No runtime material for submesh: " << submesh.materialName << '\n';
+                continue;
             }
-        );
-    }
 
-    for (Renderable& part : orcRenderables)
-    {
-        opaqueScene.push_back(
-            &part
-        );
-    }
+            orcRenderables.push_back(
+                Renderable
+                {
+                    &orcMeshes[i], &orcMaterials[materialIndex], orcTransform
+                }
+            );
+        }
 
-    double previousTime = glfwGetTime();
-    
-    glClearColor(0.4f, 0.7f, 0.9f, 1.0f);
+// -------------------------------------------------
+// LOAD TEXTURE AND COOROSPONDING UNIFORM DATA
+// -------------------------------------------------
+        stbi_set_flip_vertically_on_load(true);
+        const Texture* texture = GetOrLoadTexture(textureCache,"assets/textures/TexturePallete_512x512_MedievalPack.png");
+        const Texture* secondTexture = GetOrLoadTexture( textureCache,"assets/textures/TexturePallete_LowPoly_512x512_MedievalPack.png");
 
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
-    glCullFace(GL_BACK);
-    glFrontFace(GL_CCW);
-    glEnable(GL_BLEND);
-    glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
-
-    // -------------------------------------------------
-    // APPLICATION LOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOP
-    // -------------------------------------------------
-    while (!glfwWindowShouldClose(window))
-    {
-        // -------------------------------------------------
-        // Events + Time
-        // -------------------------------------------------
-
-        glfwPollEvents();
-        
-        const double currentTime = glfwGetTime();
-        const float deltaTime = static_cast<float>( currentTime - previousTime );
-        previousTime = currentTime;
-
-        // -------------------------------------------------
-        // UPDATE
-        // -------------------------------------------------
-
-        // Camera state
-        ProcessCameraInput( window, deltaTime, camera);
-
-        // Light state
-        lightAngle += deltaTime * 0.45f;
-        
-        lightDirection.x = glm::cos(lightAngle);
-        lightDirection.y = 0.85f;
-        lightDirection.z = glm::sin(lightAngle);
-
-        // Object state
-        objectA.transform.rotationDegrees += 50.0f * deltaTime;
-        objectB.transform.rotationDegrees += 50.0f * deltaTime;
-        objectD.transform.position.x = 28.0f * glm::cos(lightAngle);
-        objectD.transform.position.z = 28.0f * glm::sin(lightAngle);
-
-        // -------------------------------------------------
-        // DERIVE FRAME DATA
-        // -------------------------------------------------
-        const glm::vec3 cameraForward = CalculateCameraForward( camera.yaw, camera.pitch );
-        const glm::vec3 cameraRight = glm::normalize( glm::cross( cameraForward, worldUp ) );
-        const glm::vec3 cameraUp = glm::normalize( glm::cross( cameraRight, cameraForward ) );
-
-        // Runtime grass spawning
-        const bool gIsDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
-
-        if (gIsDown && !gWasDown)
+        if (texture == nullptr || secondTexture == nullptr)
         {
-            glm::vec3 spawnPosition = camera.position + cameraForward * 10.0f;
-            float size = 1.5f;
-            spawnPosition.y = size * .5f;
+            return 1;
+        }
+
+        const AtlasRegion brickRegion = MakeAtlasRegion( 128, 160, 32, 32, texture->width, texture->height );
+        const AtlasRegion woodRegion = MakeAtlasRegion( 160, 256, 32, 32, texture->width, texture->height );
+        const AtlasRegion grassRegion = MakeAtlasRegion( 32, 160, 32, 32,  texture->width, texture->height );
+        const AtlasRegion fireRegion = MakeAtlasRegion( 0, 0, 512, 512,  secondTexture->width, secondTexture->height );
+        const AtlasRegion grassCardRegion = MakeAtlasRegion( 3, 472, 32, 32,  texture->width, texture->height );
+
+        std::cout << "Unique GPU textures: " << textureCache.size() << '\n';
+// -------------------------------------------------
+// LIGHT AND CAMERA STATE
+// -------------------------------------------------
+        float lightAngle = 0.0f;
+        float lightIntensity = 3.0f;
+
+        //camera
+        Camera camera
+        {
+            glm::vec3(0.0f, 6.5f, 5.0f),
+            -90.0f,
+            0.0f
+        };
+        
+// -------------------------------------------------
+// Mesh GPU resources
+// -------------------------------------------------
+        
+        //CUBE MESH
+        Mesh cubeMesh =
+            CreateMesh(
+                CUBE_INDEXED_VERTICES.data(),
+                CUBE_INDEXED_VERTICES.size(),
+                CUBE_INDICES.data(),
+                CUBE_INDICES.size()
+            );
+        //PLANE MESH
+        Mesh planeMesh =
+            CreateMesh(
+                PLANE_VERTICES.data(),
+                PLANE_VERTICES.size(),
+                PLANE_INDICES.data(),
+                PLANE_INDICES.size()
+            );
+        Mesh cardMesh  = 
+            CreateMesh(
+                CARD_VERTICES.data(),
+                CARD_VERTICES.size(),
+                CARD_INDICES.data(),
+                CARD_INDICES.size()
+            );
+// -------------------------------------------------
+// Shader program
+// -------------------------------------------------
+        const unsigned int shaderProgram = CreateShaderProgram();
+        if (shaderProgram == 0)
+        {
+            std::cerr << "Failed to create shader program.\n";
+            return 1;
+        }
+        
+// -------------------------------------------------
+//UNIFORM LOCATIONS
+// -------------------------------------------------
+        const int modelLocation =          glGetUniformLocation(shaderProgram, "model");
+        const int viewLocation =           glGetUniformLocation(shaderProgram, "view");
+        const int projectionLocation =     glGetUniformLocation(shaderProgram, "projection");
+        const int lightDirectionLocation = glGetUniformLocation(shaderProgram, "lightDirection");
+        const int lightColorLocation =     glGetUniformLocation(shaderProgram, "lightColor");
+        const int cameraPositionLocation = glGetUniformLocation(shaderProgram, "cameraPosition");
+        const int shininessLocation =       glGetUniformLocation(shaderProgram, "shininess");
+        const int specularStrengthLocation = glGetUniformLocation(shaderProgram, "specularStrength");
+        const int lightIntensityLocation = glGetUniformLocation(shaderProgram, "lightIntensity");
+        const int materialColorLocation = glGetUniformLocation( shaderProgram, "materialColor" );
+        const int textureSamplerLocation = glGetUniformLocation(shaderProgram,"textureSampler" );
+        const int uvOffsetLocation = glGetUniformLocation( shaderProgram, "uvOffset" );
+        const int uvScaleLocation = glGetUniformLocation( shaderProgram, "uvScale" );
+        const int uvTilingLocation = glGetUniformLocation( shaderProgram, "uvTiling" );
+        const int materialOpacityLocation = glGetUniformLocation( shaderProgram, "materialOpacity" );
+        
+// -------------------------------------------------
+// Scene state
+// -------------------------------------------------
+        
+        Material material_brick
+        {
+            texture,
+            
+            glm::vec3(1.0f),
+            1.0f,          // opacity
+
+            .50f,
+            16.0f,
+
+            brickRegion.offset,
+            brickRegion.scale,
+            glm::vec2(1.5f,2.0f)
+        };
+        Material material_wood
+        {
+            texture,
+            
+            glm::vec3(1.0f),
+            1.0f,          // opacity
+
+            0.1f,
+            2.0f,
+
+            woodRegion.offset,
+            woodRegion.scale,
+            glm::vec2(1.0f)
+        };
+        Material material_grass
+        {
+            texture,
+            
+            glm::vec3(1.0f),
+            1.0f,          // opacity
+
+            0.05f,
+            1.0f,
+
+            grassRegion.offset,
+            grassRegion.scale,
+            glm::vec2(5.25f)
+        };
+        Material material_fire
+        {
+            secondTexture,
+
+            glm::vec3(1.0f),
+            1.0f,          // opacity
+
+            1.0f,
+            64.0f,
+
+            fireRegion.offset,
+            fireRegion.scale,
+            glm::vec2(1.0f)
+        };
+        Material material_grass_card
+        {
+            texture,
+
+            glm::vec3(1.0f),
+            0.75f,          // opacity
+
+            1.0f,
+            64.0f,
+
+            grassCardRegion.offset,
+            grassCardRegion.scale,
+            glm::vec2(1.0f)
+        };
+
+        Renderable objectA
+        {
+            &cubeMesh,
+            &material_brick,
+            Transform
+            {
+                glm::vec3(1.5f, 5.0f, -5.0f),
+                glm::vec3(1.25f),
+
+                45.0f,
+                glm::vec3(1.0f, 1.0f, 0.0f)
+            }
+        };
+        Renderable objectB
+        {
+            &cubeMesh,
+            &material_wood,
+            Transform
+            {
+                glm::vec3(-1.5f, 5.0f, -5.0f),
+                glm::vec3(1.0f),
+
+                0.0f,
+                glm::vec3(-1.0f, -1.0f, 0.0f)
+            }
+        };
+        Renderable objectC
+        {
+            &planeMesh,
+            &material_grass,
+            Transform
+            {
+                glm::vec3(0.0f, 0.0f, 0.0f),
+                glm::vec3(50.0f, 1.0f, 50.0f),
+
+                0.0f,
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            }
+        };
+        Renderable objectD
+        {
+            &cubeMesh,
+            &material_fire,
+            // &cardMesh,
+            // &material_grass_card,
+            Transform
+            {
+                glm::vec3(0.0f, 10.0f, 0.0f),
+                glm::vec3(2.5f),
+
+                0.0f,
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            }
+        };
+        Renderable TowerLeft
+        {
+            &cubeMesh,
+            &material_brick,
+            Transform
+            {
+                glm::vec3(-10.0f, 2.5f, -15.0f),
+                glm::vec3(5.0f),
+
+                0.0f,
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            }
+        };
+        Renderable TowerRight
+        {
+            &cubeMesh,
+            &material_brick,
+            Transform
+            {
+                glm::vec3(5.0f, 2.5f, -15.0f),
+                glm::vec3(5.0f),
+
+                0.0f,
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            }
+        };
+        Renderable Wall_1
+        {
+            &cubeMesh,
+            &material_brick,
+            Transform
+            {
+                glm::vec3(-5.0f, 1.5f, -15.0f),
+                glm::vec3(5.0f, 3.0f, 2.0f),
+
+                0.0f,
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            }
+        };
+        Renderable Wall_2
+        {
+            &cubeMesh,
+            &material_brick,
+            Transform
+            {
+                glm::vec3(0.0f, 1.5f, -15.0f),
+                glm::vec3(5.0f, 3.0f, 2.0f),
+
+                0.0f,
+                glm::vec3(0.0f, 1.0f, 0.0f)
+            }
+        };
+        
+        std::vector<Renderable*> opaqueScene
+        {
+            &objectA,
+            &objectB,
+            &objectC,
+            &objectD,
+            &TowerLeft,
+            &TowerRight,
+            &Wall_1,
+            &Wall_2,
+        };
+
+        std::vector<Renderable> transparentScene;
+        transparentScene.reserve(50);
+        for (int i = 0; i < 10; ++i)
+        {
+            const float x =
+                -10.0f + static_cast<float>(i) * 2.0f;
 
             transparentScene.push_back(
                 Renderable
@@ -1644,8 +1466,8 @@ int main()
 
                     Transform
                     {
-                        spawnPosition,
-                        glm::vec3(size),
+                        glm::vec3(x, .5f, -8.0f),
+                        glm::vec3(1.0f),
 
                         0.0f,
                         glm::vec3(0.0f, 1.0f, 0.0f)
@@ -1653,149 +1475,217 @@ int main()
                 }
             );
         }
-        gWasDown = gIsDown; // if button is still down gWasDown stays true prevent repeated spawns per the if check
 
-        const bool rIsDown = glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS;
-        if (rIsDown && !rWasDown)
+        for (Renderable& part : orcRenderables)
         {
-            if (!transparentScene.empty())
-            {
-                auto nearest = std::min_element( transparentScene.begin(), transparentScene.end(),
-                        [&camera]
-                        ( const Renderable& a, const Renderable& b )
-                        {
-                            const glm::vec3 aToCamera = a.transform.position - camera.position;
-                            const glm::vec3 bToCamera = b.transform.position - camera.position;
-
-                            const float aDistanceSquared = glm::dot(aToCamera, aToCamera);
-                            const float bDistanceSquared = glm::dot(bToCamera, bToCamera);
-                            return aDistanceSquared < bDistanceSquared;
-                        }
-                    );
-
-                transparentScene.erase(nearest);
-            }
-        }
-        rWasDown = rIsDown;
-
-        glfwGetFramebufferSize( window, &framebufferWidth, &framebufferHeight );
-
-        if( framebufferWidth <= 0 || framebufferHeight <= 0 ) 
-        {
-            continue; 
+            opaqueScene.push_back(
+                &part
+            );
         }
 
-        const glm::mat4 view = BuildViewMatrix( camera.position, cameraForward, cameraUp );
-        const glm::mat4 projection = BuildProjectionMatrix( framebufferWidth, framebufferHeight );
-        // -------------------------------------------------
-        // BEGIN RENDER
-        // -------------------------------------------------
-
-        glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-        glUseProgram(shaderProgram);
-
-        // -------------------------------------------------
-        // FRAME-WIDE UNIFORMS
-        // -------------------------------------------------
+        double previousTime = glfwGetTime();
         
-        glUniformMatrix4fv( viewLocation, 1, GL_FALSE, glm::value_ptr(view) );
-        glUniformMatrix4fv( projectionLocation, 1, GL_FALSE, glm::value_ptr(projection) );
-        glUniform3fv( cameraPositionLocation, 1, glm::value_ptr(camera.position) );
-        glUniform3fv( lightDirectionLocation, 1, glm::value_ptr(lightDirection) );
-        glUniform3fv( lightColorLocation, 1, glm::value_ptr(lightColor) );
-        glUniform1f( lightIntensityLocation, lightIntensity );
+        glClearColor(0.4f, 0.7f, 0.9f, 1.0f);
 
-        // -------------------------------------------------
-        // TEXTURE STUFF
-        // -------------------------------------------------
-        //The texture unit currently configuring is unit 0.
-        glActiveTexture(GL_TEXTURE0); 
-        //textureSampler should sample from Texture Unit 0.
-        glUniform1i( textureSamplerLocation, 0 );
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_BACK);
+        glFrontFace(GL_CCW);
+        glEnable(GL_BLEND);
+        glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 
-        // -------------------------------------------------
-        // DRAW CUBE MESH
-        // -------------------------------------------------
-        glDepthMask(GL_TRUE);
-        for (const Renderable* object : opaqueScene)
+// -------------------------------------------------
+// APPLICATION LOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOP
+// -------------------------------------------------
+        while (!glfwWindowShouldClose(window))
         {
-            DrawRenderable( 
-                *object, 
-                modelLocation,
-                materialColorLocation, 
-                materialOpacityLocation,
-                specularStrengthLocation, 
-                shininessLocation,
-                uvOffsetLocation, 
-                uvScaleLocation, 
-                uvTilingLocation 
-            );
-        }
-        glDepthMask(GL_FALSE);
 
-        std::sort(
-            transparentScene.begin(),
-            transparentScene.end(),
+// -------------------------------------------------
+// Events + Time
+// -------------------------------------------------
+            glfwPollEvents();
+            
+            const double currentTime = glfwGetTime();
+            const float deltaTime = static_cast<float>( currentTime - previousTime );
+            previousTime = currentTime;
 
-            [&camera]
-            ( const Renderable& a, const Renderable& b )
+// -------------------------------------------------
+// UPDATE
+// -------------------------------------------------
+
+            // Camera state
+            ProcessCameraInput( window, deltaTime, camera);
+
+            // Light state
+            lightAngle += deltaTime * 0.45f;
+            
+            lightDirection.x = glm::cos(lightAngle);
+            lightDirection.y = 0.85f;
+            lightDirection.z = glm::sin(lightAngle);
+
+            // Object state
+            objectA.transform.rotationDegrees += 50.0f * deltaTime;
+            objectB.transform.rotationDegrees += 50.0f * deltaTime;
+            objectD.transform.position.x = 28.0f * glm::cos(lightAngle);
+            objectD.transform.position.z = 28.0f * glm::sin(lightAngle);
+
+// -------------------------------------------------
+// DERIVE FRAME DATA
+// -------------------------------------------------
+            const glm::vec3 cameraForward = CalculateCameraForward( camera.yaw, camera.pitch );
+            const glm::vec3 cameraRight = glm::normalize( glm::cross( cameraForward, worldUp ) );
+            const glm::vec3 cameraUp = glm::normalize( glm::cross( cameraRight, cameraForward ) );
+
+            // Runtime grass spawning
+            const bool gIsDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+
+            if (gIsDown && !gWasDown)
             {
-                const glm::vec3 aToCamera = camera.position - a.transform.position;
-                const glm::vec3 bToCamera = camera.position - b.transform.position;
-                const float aDistanceSquared = glm::dot( aToCamera, aToCamera );
-                const float bDistanceSquared = glm::dot( bToCamera, bToCamera );
+                glm::vec3 spawnPosition = camera.position + cameraForward * 10.0f;
+                float size = 1.5f;
+                spawnPosition.y = size * .5f;
 
-                return aDistanceSquared > bDistanceSquared;
+                transparentScene.push_back(
+                    Renderable
+                    {
+                        &cardMesh,
+                        &material_grass_card,
+
+                        Transform
+                        {
+                            spawnPosition,
+                            glm::vec3(size),
+
+                            0.0f,
+                            glm::vec3(0.0f, 1.0f, 0.0f)
+                        }
+                    }
+                );
             }
-        );
+            gWasDown = gIsDown; // if button is still down gWasDown stays true prevent repeated spawns per the if check
 
-        for (const Renderable& object : transparentScene)
-        {
-            DrawRenderable( 
-                object, 
-                modelLocation,
-                materialColorLocation, 
-                materialOpacityLocation,
-                specularStrengthLocation, 
-                shininessLocation,
-                uvOffsetLocation, 
-                uvScaleLocation, 
-                uvTilingLocation 
+            const bool rIsDown = glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS;
+            if (rIsDown && !rWasDown)
+            {
+                if (!transparentScene.empty())
+                {
+                    auto nearest = std::min_element( transparentScene.begin(), transparentScene.end(),
+                            [&camera]
+                            ( const Renderable& a, const Renderable& b )
+                            {
+                                const glm::vec3 aToCamera = a.transform.position - camera.position;
+                                const glm::vec3 bToCamera = b.transform.position - camera.position;
+
+                                const float aDistanceSquared = glm::dot(aToCamera, aToCamera);
+                                const float bDistanceSquared = glm::dot(bToCamera, bToCamera);
+                                return aDistanceSquared < bDistanceSquared;
+                            }
+                        );
+
+                    transparentScene.erase(nearest);
+                }
+            }
+            rWasDown = rIsDown;
+
+            glfwGetFramebufferSize( window, &framebufferWidth, &framebufferHeight );
+
+            if( framebufferWidth <= 0 || framebufferHeight <= 0 ) 
+            {
+                continue; 
+            }
+
+            const glm::mat4 view = BuildViewMatrix( camera.position, cameraForward, cameraUp );
+            const glm::mat4 projection = BuildProjectionMatrix( framebufferWidth, framebufferHeight );
+// -------------------------------------------------
+// BEGIN RENDER
+// -------------------------------------------------
+
+            glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+            glUseProgram(shaderProgram);
+
+// -------------------------------------------------
+// FRAME-WIDE UNIFORMS
+// -------------------------------------------------
+            
+            glUniformMatrix4fv( viewLocation, 1, GL_FALSE, glm::value_ptr(view) );
+            glUniformMatrix4fv( projectionLocation, 1, GL_FALSE, glm::value_ptr(projection) );
+            glUniform3fv( cameraPositionLocation, 1, glm::value_ptr(camera.position) );
+            glUniform3fv( lightDirectionLocation, 1, glm::value_ptr(lightDirection) );
+            glUniform3fv( lightColorLocation, 1, glm::value_ptr(lightColor) );
+            glUniform1f( lightIntensityLocation, lightIntensity );
+
+// -------------------------------------------------
+// TEXTURE STUFF
+// -------------------------------------------------
+            //The texture unit currently configuring is unit 0.
+            glActiveTexture(GL_TEXTURE0); 
+            //textureSampler should sample from Texture Unit 0.
+            glUniform1i( textureSamplerLocation, 0 );
+
+// -------------------------------------------------
+// DRAW CUBE MESH
+// -------------------------------------------------
+            glDepthMask(GL_TRUE);
+            for (const Renderable* object : opaqueScene)
+            {
+                DrawRenderable( 
+                    *object, 
+                    modelLocation,
+                    materialColorLocation, 
+                    materialOpacityLocation,
+                    specularStrengthLocation, 
+                    shininessLocation,
+                    uvOffsetLocation, 
+                    uvScaleLocation, 
+                    uvTilingLocation 
+                );
+            }
+            glDepthMask(GL_FALSE);
+
+            std::sort(
+                transparentScene.begin(),
+                transparentScene.end(),
+
+                [&camera]
+                ( const Renderable& a, const Renderable& b )
+                {
+                    const glm::vec3 aToCamera = camera.position - a.transform.position;
+                    const glm::vec3 bToCamera = camera.position - b.transform.position;
+                    const float aDistanceSquared = glm::dot( aToCamera, aToCamera );
+                    const float bDistanceSquared = glm::dot( bToCamera, bToCamera );
+
+                    return aDistanceSquared > bDistanceSquared;
+                }
             );
+
+            for (const Renderable& object : transparentScene)
+            {
+                DrawRenderable( 
+                    object, 
+                    modelLocation,
+                    materialColorLocation, 
+                    materialOpacityLocation,
+                    specularStrengthLocation, 
+                    shininessLocation,
+                    uvOffsetLocation, 
+                    uvScaleLocation, 
+                    uvTilingLocation 
+                );
+            }
+            glDepthMask(GL_TRUE);
+
+// -------------------------------------------------
+// Present
+// -------------------------------------------------
+            glfwSwapBuffers(window);
         }
-        glDepthMask(GL_TRUE);
 
-        // -------------------------------------------------
-        // Present
-        // -------------------------------------------------
-        glfwSwapBuffers(window);
+// -------------------------------------------------
+// Cleanup
+// -------------------------------------------------
+        glDeleteProgram(shaderProgram);
     }
 
-    // -------------------------------------------------
-    // Cleanup
-    // -------------------------------------------------
-    glDeleteProgram(shaderProgram);
-    DestroyMesh(cubeMesh);
-    DestroyMesh(planeMesh);
-    DestroyMesh(cardMesh );
-    for (Mesh& mesh : orcMeshes)
-    {
-        DestroyMesh(mesh);
-    }
-    // for (Texture& texture : orcTextures)
-    // {
-    //     DestroyTexture(texture);
-    // }
-    // for (auto& entry : textureCache)
-    // {
-    //     DestroyTexture(
-    //         entry.second
-    //     );
-    // }
-    //DestroyTexture(texture);
-    //DestroyTexture(secondTexture);
-    
-    textureCache.clear();   
     glfwDestroyWindow(window);
     glfwTerminate();
 
