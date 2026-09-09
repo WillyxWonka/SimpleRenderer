@@ -255,12 +255,26 @@ namespace
         1.0f,
         0.0f
     };
-    glm::vec3 lightColor
+    // glm::vec3 pointLightPosition
+    // {
+    //     0.0f,
+    //     10.0f,
+    //     -5.0f
+    // };
+    struct PointLight
     {
-        1.0f,
-        .95f,
-        .85f
+        glm::vec3 position;
+        glm::vec3 color;
+
+        float intensity;
+        float radius;
     };
+    // glm::vec3 lightColor
+    // {
+    //     1.0f,
+    //     .875f,
+    //     .85f
+    // };
 
     glm::vec3 CalculateCameraForward(float yawDegrees, float pitchDegrees)
     {
@@ -405,15 +419,18 @@ namespace
         
         out vec4 fragmentColor;
 
-        uniform vec3 lightDirection;
+        // uniform vec3 lightDirection;
+        // uniform float pointLightRadius;
+        // uniform vec3 pointLightPosition;
+        uniform float lightIntensity;
         uniform vec3 lightColor;
+
         uniform vec3 cameraPosition;
 
         uniform sampler2D textureSampler;
 
         uniform float specularStrength;
         uniform float shininess;
-        uniform float lightIntensity;
         uniform vec3 materialColor;
         uniform float materialOpacity;
 
@@ -421,31 +438,110 @@ namespace
         uniform vec2 uvScale;
         uniform vec2 uvTiling;
 
+        struct PointLight
+        {
+            vec3 position;
+            vec3 color;
+
+            float intensity;
+            float radius;
+        };
+
+        uniform PointLight pointLightA;
+        uniform PointLight pointLightB;
+
+        vec3 CalculatePointLight( PointLight light, vec3 N, vec3 V, vec3 baseColor )
+        {
+            vec3 lightVector = light.position - vertexWorldPosition;
+            float distance = length(lightVector);
+            
+            if (distance >= light.radius)
+            {
+                return vec3(0.0);
+            }
+
+            vec3 L = normalize(lightVector);
+            float diffuse = max(dot(N, L), 0.0);
+            float specular = 0.0;
+
+            if (diffuse > 0.0)
+            {
+                vec3 R = reflect(-L, N);
+                specular = pow( max(dot(R, V), 0.0), shininess );
+            }
+
+            float attenuation =
+                clamp(
+                    1.0 - distance / light.radius,
+                    0.0,
+                    1.0
+                );
+
+            attenuation *= attenuation;
+
+            vec3 diffuseLight =
+                light.color
+                * diffuse
+                * light.intensity
+                * attenuation;
+            vec3 specularLight =
+                light.color
+                * light.intensity
+                * specularStrength
+                * specular
+                * attenuation;
+                 
+            return baseColor * diffuseLight + specularLight;
+        }
+
         void main()
         {
             // N = surface normal
             // L = fragment → light
             // V = fragment → camera
 
+            //vec3 N = normalize(vertexNormal);
+            //vec3 L = normalize(lightDirection);
+
+            // vec3 lightVector = pointLightPosition - vertexWorldPosition;
+            // float distance = length(lightVector);
+            // vec3 L = normalize(lightVector);
+            // float normalizedDistance = distance / pointLightRadius;
+            
+            // float attenuation = clamp( 1.0 - normalizedDistance, 0.0, 1.0 );
+            // attenuation *= attenuation;
+
+            // vec3 V = normalize(cameraPosition - vertexWorldPosition);
+            // vec3 R = reflect(-L, N);
+            
+            // float diffuse = max(dot(N, L), 0.0);
+            // float specular = 0.0;
+
+            // if (diffuse > 0.0) { 
+            //     specular = pow( max(dot(R, V), 0.0), shininess ); 
+            // }
+                    
+            // //the more basic light produced
+            // vec3 diffuseLight = lightColor * diffuse * lightIntensity * attenuation;
+
+            //vec3 ambientLight = vec3(0.1) * lightColor;
+            
+            // hihglights on models materials from shininess values
+            // vec3 specularLight = lightColor * lightIntensity  * specularStrength * specular * attenuation;;
+
             vec3 N = normalize(vertexNormal);
-            vec3 L = normalize(lightDirection);
-            vec3 V = normalize(cameraPosition - vertexWorldPosition);
-            vec3 R = reflect(-L, N);
-            
-            float diffuse = max(dot(N, L), 0.0);
-            float specular = 0.0;
-
-            if (diffuse > 0.0) { 
-                specular = pow( max(dot(R, V), 0.0), shininess ); 
-            }
-                        
-            vec3 diffuseLight = lightColor * diffuse * lightIntensity;
-            vec3 ambientLight = vec3(0.75) * lightColor;
-            vec3 specularLight = lightColor * lightIntensity * specularStrength * specular;
-
+            vec3 V = normalize( cameraPosition - vertexWorldPosition );
             vec3 baseColor = vertexColor * materialColor;
-            vec3 litColor = baseColor * (ambientLight + diffuseLight ) + specularLight;
+            vec3 ambientLight = baseColor * 0.175;
+            vec3 pointLighting = vec3(0.0);
             
+            pointLighting += CalculatePointLight( pointLightA, N, V, baseColor );
+            pointLighting += CalculatePointLight( pointLightB, N, V, baseColor );
+
+            // vec3 litColor = baseColor * (ambientLight + diffuseLight ) + specularLight;
+
+            vec3 litColor = ambientLight + pointLighting;
+
             vec2 tiledUV = fract(vertexTexCoord * uvTiling);
             vec2 atlasUV = uvOffset + tiledUV * uvScale;
             vec4 textureColor = texture( textureSampler, atlasUV );
@@ -454,8 +550,7 @@ namespace
                 discard;
             }
 
-            //fragmentColor = vec4(litColor,1.0);
-            fragmentColor =    textureColor * vec4(litColor, materialOpacity);
+            fragmentColor = textureColor * vec4(litColor, materialOpacity);
         }
     )"};
 
@@ -1112,8 +1207,8 @@ int main()
                     glm::vec3(1.0f),
                     1.0f,
 
-                    0.2f,
-                    16.0f,
+                    2.5f,
+                    32.0f,
 
                     glm::vec2(0.0f),
                     glm::vec2(1.0f),
@@ -1183,7 +1278,7 @@ int main()
         const AtlasRegion brickRegion = MakeAtlasRegion( 128, 160, 32, 32, texture->width, texture->height );
         const AtlasRegion woodRegion = MakeAtlasRegion( 160, 256, 32, 32, texture->width, texture->height );
         const AtlasRegion grassRegion = MakeAtlasRegion( 32, 160, 32, 32,  texture->width, texture->height );
-        const AtlasRegion fireRegion = MakeAtlasRegion( 0, 0, 512, 512,  secondTexture->width, secondTexture->height );
+        const AtlasRegion fireRegion = MakeAtlasRegion( 26, 60, 1, 1,  secondTexture->width, secondTexture->height );
         const AtlasRegion grassCardRegion = MakeAtlasRegion( 3, 472, 32, 32,  texture->width, texture->height );
 
         std::cout << "Unique GPU textures: " << textureCache.size() << '\n';
@@ -1191,14 +1286,44 @@ int main()
 // LIGHT AND CAMERA STATE
 // -------------------------------------------------
         float lightAngle = 0.0f;
-        float lightIntensity = 3.0f;
+        //float lightIntensity = 10.0f;
 
         //camera
         Camera camera
         {
-            glm::vec3(0.0f, 6.5f, 5.0f),
+            glm::vec3(0.0f, 7.5f, 5.0f),
             -90.0f,
             0.0f
+        };
+
+        // PointLight pointLight
+        // {
+        //     glm::vec3(0.0f, 5.5f, -5.0f),
+
+        //     glm::vec3(
+        //         1.0f,
+        //         0.95f,
+        //         0.85f
+        //     ),
+
+        //     5.0f,   // intensity
+        //     25.0f   // radius
+        // };
+        PointLight pointLightA
+        {
+            glm::vec3(0.0f, 9.50f, -5.0f),
+            glm::vec3(1.0f, 0.95f, 0.85f),
+
+            11.0f,
+            18.0f
+        };
+        PointLight pointLightB
+        {
+            glm::vec3(-8.0f, 6.0f, -10.0f),
+            glm::vec3( 0.5f, 0.5f, 1.0f ),
+
+            15.0f,
+            10.0f
         };
         
 // -------------------------------------------------
@@ -1244,7 +1369,9 @@ int main()
         const int modelLocation =          glGetUniformLocation(shaderProgram, "model");
         const int viewLocation =           glGetUniformLocation(shaderProgram, "view");
         const int projectionLocation =     glGetUniformLocation(shaderProgram, "projection");
-        const int lightDirectionLocation = glGetUniformLocation(shaderProgram, "lightDirection");
+        // const int lightDirectionLocation = glGetUniformLocation(shaderProgram, "lightDirection");
+        // const int pointLightPositionLocation = glGetUniformLocation( shaderProgram, "pointLightPosition" );
+        // const int pointLightRadiusLocation = glGetUniformLocation( shaderProgram, "pointLightRadius" );
         const int lightColorLocation =     glGetUniformLocation(shaderProgram, "lightColor");
         const int cameraPositionLocation = glGetUniformLocation(shaderProgram, "cameraPosition");
         const int shininessLocation =       glGetUniformLocation(shaderProgram, "shininess");
@@ -1256,6 +1383,16 @@ int main()
         const int uvScaleLocation = glGetUniformLocation( shaderProgram, "uvScale" );
         const int uvTilingLocation = glGetUniformLocation( shaderProgram, "uvTiling" );
         const int materialOpacityLocation = glGetUniformLocation( shaderProgram, "materialOpacity" );
+
+        const int pointLightAPositionLocation = glGetUniformLocation( shaderProgram, "pointLightA.position" );
+        const int pointLightAColorLocation = glGetUniformLocation( shaderProgram, "pointLightA.color" );
+        const int pointLightAIntensityLocation = glGetUniformLocation( shaderProgram, "pointLightA.intensity" );
+        const int pointLightARadiusLocation = glGetUniformLocation( shaderProgram, "pointLightA.radius" ); 
+
+        const int pointLightBPositionLocation = glGetUniformLocation( shaderProgram, "pointLightB.position" );
+        const int pointLightBColorLocation = glGetUniformLocation( shaderProgram, "pointLightB.color" );
+        const int pointLightBIntensityLocation = glGetUniformLocation( shaderProgram, "pointLightB.intensity" );
+        const int pointLightBRadiusLocation = glGetUniformLocation( shaderProgram, "pointLightB.radius" );
         
 // -------------------------------------------------
 // Scene state
@@ -1268,8 +1405,8 @@ int main()
             glm::vec3(1.0f),
             1.0f,          // opacity
 
-            .50f,
-            16.0f,
+            .01f,
+            2.0f,
 
             brickRegion.offset,
             brickRegion.scale,
@@ -1379,8 +1516,8 @@ int main()
             // &material_grass_card,
             Transform
             {
-                glm::vec3(0.0f, 10.0f, 0.0f),
-                glm::vec3(2.5f),
+                glm::vec3(0.0f, 7.0f, 0.0f),
+                glm::vec3(1.0f),
 
                 0.0f,
                 glm::vec3(0.0f, 1.0f, 0.0f)
@@ -1484,8 +1621,16 @@ int main()
         }
 
         double previousTime = glfwGetTime();
-        
-        glClearColor(0.4f, 0.7f, 0.9f, 1.0f);
+
+        // 1. Calculate the scaled RGB values based on light intensity
+        float r = 0.4f;
+        float g = 0.7f;
+        float b = 0.9f;
+        float a = 1.0f;
+
+        // 2. Pass the four separate floats directly to glClearColor
+        glClearColor(r, g, b, a);
+
 
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
@@ -1510,24 +1655,32 @@ int main()
             previousTime = currentTime;
 
 // -------------------------------------------------
-// UPDATE
+// UPDATE UPDATE UPDATE UPDATE UPDATE UPDATE 
 // -------------------------------------------------
 
-            // Camera state
+    // Camera state
             ProcessCameraInput( window, deltaTime, camera);
 
-            // Light state
-            lightAngle += deltaTime * 0.45f;
+    // LIGHT STATE
+            lightAngle += deltaTime * 0.5f;
             
-            lightDirection.x = glm::cos(lightAngle);
-            lightDirection.y = 0.85f;
-            lightDirection.z = glm::sin(lightAngle);
+            // lightDirection.x = glm::cos(lightAngle);
+            // lightDirection.y = 0.85f;
+            // lightDirection.z = glm::sin(lightAngle);
 
-            // Object state
+            // pointLight.position.x = 15.0f * glm::cos(lightAngle);
+            // pointLight.position.z = 15.0f * glm::sin(lightAngle);
+            
+            pointLightB.position.x = 15.0f * glm::cos(lightAngle);
+            pointLightB.position.z = 15.0f * glm::sin(lightAngle);
+
+    // Object state
             objectA.transform.rotationDegrees += 50.0f * deltaTime;
             objectB.transform.rotationDegrees += 50.0f * deltaTime;
-            objectD.transform.position.x = 28.0f * glm::cos(lightAngle);
-            objectD.transform.position.z = 28.0f * glm::sin(lightAngle);
+            objectD.transform.position = glm::vec3( pointLightB.position.x, pointLightB.position.y, pointLightB.position.z );
+
+            // objectD.transform.position.x = 18.0f * glm::cos(lightAngle);
+            // objectD.transform.position.z = 18.0f * glm::sin(lightAngle);
 
 // -------------------------------------------------
 // DERIVE FRAME DATA
@@ -1610,9 +1763,23 @@ int main()
             glUniformMatrix4fv( viewLocation, 1, GL_FALSE, glm::value_ptr(view) );
             glUniformMatrix4fv( projectionLocation, 1, GL_FALSE, glm::value_ptr(projection) );
             glUniform3fv( cameraPositionLocation, 1, glm::value_ptr(camera.position) );
-            glUniform3fv( lightDirectionLocation, 1, glm::value_ptr(lightDirection) );
-            glUniform3fv( lightColorLocation, 1, glm::value_ptr(lightColor) );
-            glUniform1f( lightIntensityLocation, lightIntensity );
+            //glUniform3fv( lightDirectionLocation, 1, glm::value_ptr(lightDirection) );
+            // glUniform3fv( pointLightPositionLocation, 1, glm::value_ptr(pointLight.position) );
+            // glUniform3fv( lightColorLocation, 1, glm::value_ptr(lightColor) );
+            // glUniform3fv( lightColorLocation, 1, glm::value_ptr(pointLight.color) );
+            //glUniform1f( lightIntensityLocation, lightIntensity );
+            // glUniform1f( lightIntensityLocation, pointLight.intensity );
+            // glUniform1f( pointLightRadiusLocation, pointLight.radius );
+
+            glUniform3fv( pointLightAPositionLocation, 1, glm::value_ptr(pointLightA.position) );
+            glUniform3fv( pointLightAColorLocation, 1, glm::value_ptr(pointLightA.color) );
+            glUniform1f( pointLightAIntensityLocation, pointLightA.intensity );
+            glUniform1f( pointLightARadiusLocation, pointLightA.radius );
+
+            glUniform3fv( pointLightBPositionLocation, 1, glm::value_ptr(pointLightB.position) );
+            glUniform3fv( pointLightBColorLocation, 1, glm::value_ptr(pointLightB.color) );
+            glUniform1f( pointLightBIntensityLocation, pointLightB.intensity );
+            glUniform1f( pointLightBRadiusLocation, pointLightB.radius );
 
 // -------------------------------------------------
 // TEXTURE STUFF
