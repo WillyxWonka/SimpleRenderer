@@ -36,6 +36,8 @@ namespace
     constexpr float CAMERA_NEAR_PLANE = 0.1f;
     constexpr float CAMERA_FAR_PLANE = 300.0f;
 
+    float mouseSensitivity = 0.1f;
+    
     struct Vertex
     {
         // Position
@@ -249,18 +251,7 @@ namespace
         1.0f,
         0.0f
     }; 
-    glm::vec3 lightDirection
-    {
-        0.0f,
-        1.0f,
-        0.0f
-    };
-    // glm::vec3 pointLightPosition
-    // {
-    //     0.0f,
-    //     10.0f,
-    //     -5.0f
-    // };
+    
     struct PointLight
     {
         glm::vec3 position;
@@ -269,12 +260,14 @@ namespace
         float intensity;
         float radius;
     };
-    // glm::vec3 lightColor
-    // {
-    //     1.0f,
-    //     .875f,
-    //     .85f
-    // };
+    struct SunLight
+    {
+        glm::vec3 position;
+        glm::vec3 color;
+
+        float intensity;
+        float angle;
+    };
 
     glm::vec3 CalculateCameraForward(float yawDegrees, float pitchDegrees)
     {
@@ -290,7 +283,61 @@ namespace
 
         return glm::normalize(forward);
     }
+
+
+    // mouse call backs for click to drag mouse camera functionality 
+    bool IsDown;
+    bool isDragging = false;
     
+    double prevX = 0.0f;
+    double prevY = 0.0f;
+
+    glm::vec2 prevPos = glm::vec2(0.0f, 0.0f);
+    glm::vec2 mouseDelta = glm::vec2(0.0f, 0.0f);
+
+    void mouse_click_camera_drag_callBack(GLFWwindow* window, int button, int action, int mods){
+        if(button == GLFW_MOUSE_BUTTON_RIGHT){
+
+            if (action == GLFW_PRESS) {
+                glfwSetInputMode( window, GLFW_CURSOR, GLFW_CURSOR_DISABLED );
+                IsDown = true;
+
+                glfwGetCursorPos(window, &prevX, &prevY);
+
+                prevPos.x = static_cast<float>(prevX);
+                prevPos.y = static_cast<float>(prevY);
+                
+                std::cout << "click \n"; 
+            }
+            else if (action == GLFW_RELEASE) {
+                glfwSetInputMode( window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+                IsDown = false;
+
+                prevX = 0.0f;
+                prevY = 0.0f;
+                prevPos = glm::vec2(0.0f, 0.0f);
+                
+                isDragging = false;
+
+                mouseDelta = glm::vec2(0.0f);
+                std::cout << "unclick\n"; 
+            }
+        }
+    }
+    void mouse_pos_change_callBack(GLFWwindow* window, double xPos, double yPos){
+        if(!IsDown){
+            return;
+        }
+        if(IsDown){
+            isDragging = true;
+            mouseDelta.x += prevPos.x - xPos;
+            mouseDelta.y += prevPos.y - yPos;
+            
+            prevPos = glm::vec2(xPos, yPos);
+            std::cout << "\n" << "XDragging :" <<mouseDelta.x  << "\n" <<"YDragging :" << mouseDelta.y << "\n"  ;  
+        }
+    }
+
     constexpr std::array<Vertex, 24> CUBE_INDEXED_VERTICES =
     {{
         // Front: 0-3  normal = +Z
@@ -419,9 +466,6 @@ namespace
         
         out vec4 fragmentColor;
 
-        // uniform vec3 lightDirection;
-        // uniform float pointLightRadius;
-        // uniform vec3 pointLightPosition;
         uniform float lightIntensity;
         uniform vec3 lightColor;
 
@@ -446,9 +490,23 @@ namespace
             float intensity;
             float radius;
         };
+        struct SunLight
+        {
+            vec3 position;
+            vec3 color;
+
+            float intensity;
+            float angle;
+        };
 
         uniform PointLight pointLightA;
         uniform PointLight pointLightB;
+        uniform SunLight sun;
+
+        const int MAX_POINT_LIGHTS = 8;
+
+        uniform PointLight pointLights[MAX_POINT_LIGHTS];
+        uniform int pointLightCount;
 
         vec3 CalculatePointLight( PointLight light, vec3 N, vec3 V, vec3 baseColor )
         {
@@ -479,17 +537,55 @@ namespace
 
             attenuation *= attenuation;
 
+            // //the more basic light produced
             vec3 diffuseLight =
                 light.color
                 * diffuse
                 * light.intensity
                 * attenuation;
+           
+            // hihglights on models materials from shininess values
             vec3 specularLight =
                 light.color
                 * light.intensity
                 * specularStrength
                 * specular
                 * attenuation;
+                 
+            return baseColor * diffuseLight + specularLight;
+        }
+        
+        vec3 CalculateSunLight(SunLight light, vec3 N, vec3 V, vec3 baseColor){
+            
+            // Same sunlight direction for every fragment.
+            vec3 L = normalize(light.position);
+
+            // Is this surface facing the sun?
+            float diffuse = max(dot(N, L), 0.0);
+
+            // Is the sun above the horizon?
+            float sunHeight = max(L.y, 0.0);
+
+            float specular = 0.0;
+            if (diffuse > 0.0)
+            {
+                vec3 R = reflect(-L, N);
+                specular = pow( max(dot(R, V), 0.0), shininess );
+            }
+            // //the more basic light produced
+            vec3 diffuseLight =
+                light.color
+                * diffuse
+                * light.intensity
+                * sunHeight;
+           
+            // hihglights on models materials from shininess values
+            vec3 specularLight =
+                light.color
+                * light.intensity
+                * specularStrength
+                * specular
+                * sunHeight;
                  
             return baseColor * diffuseLight + specularLight;
         }
@@ -500,50 +596,29 @@ namespace
             // L = fragment → light
             // V = fragment → camera
 
-            //vec3 N = normalize(vertexNormal);
-            //vec3 L = normalize(lightDirection);
-
-            // vec3 lightVector = pointLightPosition - vertexWorldPosition;
-            // float distance = length(lightVector);
-            // vec3 L = normalize(lightVector);
-            // float normalizedDistance = distance / pointLightRadius;
-            
-            // float attenuation = clamp( 1.0 - normalizedDistance, 0.0, 1.0 );
-            // attenuation *= attenuation;
-
-            // vec3 V = normalize(cameraPosition - vertexWorldPosition);
-            // vec3 R = reflect(-L, N);
-            
-            // float diffuse = max(dot(N, L), 0.0);
-            // float specular = 0.0;
-
-            // if (diffuse > 0.0) { 
-            //     specular = pow( max(dot(R, V), 0.0), shininess ); 
-            // }
-                    
-            // //the more basic light produced
-            // vec3 diffuseLight = lightColor * diffuse * lightIntensity * attenuation;
-
-            //vec3 ambientLight = vec3(0.1) * lightColor;
-            
-            // hihglights on models materials from shininess values
-            // vec3 specularLight = lightColor * lightIntensity  * specularStrength * specular * attenuation;;
-
             vec3 N = normalize(vertexNormal);
             vec3 V = normalize( cameraPosition - vertexWorldPosition );
+
             vec3 baseColor = vertexColor * materialColor;
             vec3 ambientLight = baseColor * 0.175;
+           
             vec3 pointLighting = vec3(0.0);
-            
-            pointLighting += CalculatePointLight( pointLightA, N, V, baseColor );
-            pointLighting += CalculatePointLight( pointLightB, N, V, baseColor );
+            vec3 sunLight = vec3(0.0);
 
-            // vec3 litColor = baseColor * (ambientLight + diffuseLight ) + specularLight;
+            // pointLighting += CalculatePointLight( pointLightA, N, V, baseColor );
+            // pointLighting += CalculatePointLight( pointLightB, N, V, baseColor );
+            for (int i = 0; i < pointLightCount; ++i)
+            {
+                pointLighting += CalculatePointLight( pointLights[i], N, V, baseColor );
+            }
 
-            vec3 litColor = ambientLight + pointLighting;
+            sunLight = CalculateSunLight(sun,N,V, baseColor);
+
+            vec3 litColor = ambientLight + pointLighting + sunLight;
 
             vec2 tiledUV = fract(vertexTexCoord * uvTiling);
             vec2 atlasUV = uvOffset + tiledUV * uvScale;
+
             vec4 textureColor = texture( textureSampler, atlasUV );
             if (textureColor.a < 0.5)
             {
@@ -625,6 +700,13 @@ namespace
 
     void ProcessCameraInput(GLFWwindow* window, float deltaTime, Camera& camera)
     {
+        //resets camera positon
+        if (glfwGetKey(window, GLFW_KEY_0) == GLFW_PRESS)
+        {
+            camera.position = glm::vec3(0.0f, 5.0f, 0.0f);
+            camera.yaw = -90.0f;
+            camera.pitch = 0.0f;
+        }
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -646,8 +728,13 @@ namespace
             camera.pitch -= CAMERA_ROTATION_SPEED * deltaTime;
         }
 
+        camera.yaw -= mouseDelta.x * mouseSensitivity;
+        camera.pitch += mouseDelta.y * mouseSensitivity;
+        mouseDelta = glm::vec2(0.0f);
+        
         camera.pitch = glm::clamp( camera.pitch, -89.0f, 89.0f );
         glm::vec3 cameraForward = CalculateCameraForward(camera.yaw, camera.pitch);
+
         glm::vec3 cameraRight = glm::normalize( glm::cross(cameraForward, worldUp) );
         glm::vec3 cameraUp = glm::normalize( glm::cross(cameraRight, cameraForward) );
 
@@ -687,7 +774,7 @@ namespace
             camera.position  -= cameraUp * cameraMovement;
         }
     }
-
+    
     glm::mat4 BuildViewMatrix( const glm::vec3& cameraPosition, const glm::vec3&    cameraForward, const glm::vec3& cameraUp)
     {
         return glm::lookAt(
@@ -1120,6 +1207,12 @@ namespace
     }
 }
 
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+// 
+// MAIN
+// 
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
 int main()
 {
 // -------------------------------------------------
@@ -1161,6 +1254,8 @@ int main()
 // OPENGL RESOURCE LIFETIME
 // ---------------------------------------------
     {
+        glfwSetMouseButtonCallback(window, mouse_click_camera_drag_callBack);
+        glfwSetCursorPosCallback(window, mouse_pos_change_callBack);
         glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
 
         int framebufferWidth = 0;
@@ -1178,10 +1273,7 @@ int main()
 // -------------------------------------------------
         ObjData orc_Obj = LoadObjData("assets/models/TD_EnemyModels.obj");
         std::vector<ObjMaterial> objMaterials = LoadMtlData( "assets/models/TD_EnemyModels.mtl" );
-
-        // std::vector<Texture> orcTextures;
-        // orcTextures.reserve( objMaterials.size() );
-
+        
         std::unordered_map<std::string, Texture> textureCache;
         stbi_set_flip_vertically_on_load(true);
 
@@ -1285,10 +1377,15 @@ int main()
 // -------------------------------------------------
 // LIGHT AND CAMERA STATE
 // -------------------------------------------------
-        float lightAngle = 0.0f;
-        //float lightIntensity = 10.0f;
 
-        //camera
+        float lightAngle = 0.0f;
+        std::vector<PointLight> pointLights;
+        // pointLights.reserve(2);
+
+        float elevation = glm::radians(65.0f);
+        float azimuth   = glm::radians(45.0f); // xz-plane
+
+        //CAMERA 
         Camera camera
         {
             glm::vec3(0.0f, 7.5f, 5.0f),
@@ -1296,36 +1393,49 @@ int main()
             0.0f
         };
 
-        // PointLight pointLight
-        // {
-        //     glm::vec3(0.0f, 5.5f, -5.0f),
-
-        //     glm::vec3(
-        //         1.0f,
-        //         0.95f,
-        //         0.85f
-        //     ),
-
-        //     5.0f,   // intensity
-        //     25.0f   // radius
-        // };
+        //LIGHTS - SUN - SKY
         PointLight pointLightA
         {
-            glm::vec3(0.0f, 9.50f, -5.0f),
-            glm::vec3(1.0f, 0.95f, 0.85f),
+            glm::vec3(0.0f, 7.25f, -5.0f),
+            glm::vec3(1.0f, 0.125f, 0.150f),
 
-            11.0f,
-            18.0f
+            25.0f,
+            10.0f
         };
         PointLight pointLightB
         {
             glm::vec3(-8.0f, 6.0f, -10.0f),
-            glm::vec3( 0.5f, 0.5f, 1.0f ),
+            glm::vec3( 0.25f, 1.0f, .10f ),
 
-            15.0f,
-            10.0f
+            18.0f,
+            12.0f
         };
         
+        pointLights.push_back(pointLightA);
+        pointLights.push_back(pointLightB);
+
+        glm::vec3 lowSkyColor =
+        {
+            0.01f, 0.075f, 0.15f
+        };
+        glm::vec3 highSkyColor =
+        {
+            .8f, .55f, .4f
+        };
+        glm::vec3 sunDirection
+        {
+            std::cos(elevation) * std::cos(azimuth),
+            std::sin(elevation),
+            std::cos(elevation) * std::sin(azimuth)
+        };
+        SunLight sun
+        {
+            glm::vec3(sunDirection),
+            glm::vec3(glm::mix( lowSkyColor, highSkyColor, elevation)),
+
+            5.0f ,
+            45.0f
+        };
 // -------------------------------------------------
 // Mesh GPU resources
 // -------------------------------------------------
@@ -1369,20 +1479,17 @@ int main()
         const int modelLocation =          glGetUniformLocation(shaderProgram, "model");
         const int viewLocation =           glGetUniformLocation(shaderProgram, "view");
         const int projectionLocation =     glGetUniformLocation(shaderProgram, "projection");
-        // const int lightDirectionLocation = glGetUniformLocation(shaderProgram, "lightDirection");
-        // const int pointLightPositionLocation = glGetUniformLocation( shaderProgram, "pointLightPosition" );
-        // const int pointLightRadiusLocation = glGetUniformLocation( shaderProgram, "pointLightRadius" );
-        const int lightColorLocation =     glGetUniformLocation(shaderProgram, "lightColor");
         const int cameraPositionLocation = glGetUniformLocation(shaderProgram, "cameraPosition");
+
         const int shininessLocation =       glGetUniformLocation(shaderProgram, "shininess");
         const int specularStrengthLocation = glGetUniformLocation(shaderProgram, "specularStrength");
-        const int lightIntensityLocation = glGetUniformLocation(shaderProgram, "lightIntensity");
         const int materialColorLocation = glGetUniformLocation( shaderProgram, "materialColor" );
+        const int materialOpacityLocation = glGetUniformLocation( shaderProgram, "materialOpacity" );
+
         const int textureSamplerLocation = glGetUniformLocation(shaderProgram,"textureSampler" );
         const int uvOffsetLocation = glGetUniformLocation( shaderProgram, "uvOffset" );
         const int uvScaleLocation = glGetUniformLocation( shaderProgram, "uvScale" );
         const int uvTilingLocation = glGetUniformLocation( shaderProgram, "uvTiling" );
-        const int materialOpacityLocation = glGetUniformLocation( shaderProgram, "materialOpacity" );
 
         const int pointLightAPositionLocation = glGetUniformLocation( shaderProgram, "pointLightA.position" );
         const int pointLightAColorLocation = glGetUniformLocation( shaderProgram, "pointLightA.color" );
@@ -1393,6 +1500,11 @@ int main()
         const int pointLightBColorLocation = glGetUniformLocation( shaderProgram, "pointLightB.color" );
         const int pointLightBIntensityLocation = glGetUniformLocation( shaderProgram, "pointLightB.intensity" );
         const int pointLightBRadiusLocation = glGetUniformLocation( shaderProgram, "pointLightB.radius" );
+
+        const int SunLightPositionLocation = glGetUniformLocation( shaderProgram, "sun.position" );
+        const int SunLightColorLocation = glGetUniformLocation( shaderProgram, "sun.color" );
+        const int SunLightIntensityLocation = glGetUniformLocation( shaderProgram, "sun.intensity" );
+        const int SunLightAngleLocation = glGetUniformLocation( shaderProgram, "sun.angle" );
         
 // -------------------------------------------------
 // Scene state
@@ -1622,14 +1734,13 @@ int main()
 
         double previousTime = glfwGetTime();
 
-        // 1. Calculate the scaled RGB values based on light intensity
-        float r = 0.4f;
-        float g = 0.7f;
-        float b = 0.9f;
-        float a = 1.0f;
+        //glm::vec3 sunDirection = glm::normalize(sun.position);
+        //float sunHeightFactor = glm::clamp(sun.position.y, 0.0f, 1.0f);
+       
+        glm::vec3 skyColor = glm::mix( lowSkyColor, highSkyColor, elevation);
 
         // 2. Pass the four separate floats directly to glClearColor
-        glClearColor(r, g, b, a);
+        glClearColor( skyColor.r, skyColor.g, skyColor.b, 1.0f );
 
 
         glEnable(GL_DEPTH_TEST);
@@ -1663,14 +1774,7 @@ int main()
 
     // LIGHT STATE
             lightAngle += deltaTime * 0.5f;
-            
-            // lightDirection.x = glm::cos(lightAngle);
-            // lightDirection.y = 0.85f;
-            // lightDirection.z = glm::sin(lightAngle);
-
-            // pointLight.position.x = 15.0f * glm::cos(lightAngle);
-            // pointLight.position.z = 15.0f * glm::sin(lightAngle);
-            
+        
             pointLightB.position.x = 15.0f * glm::cos(lightAngle);
             pointLightB.position.z = 15.0f * glm::sin(lightAngle);
 
@@ -1678,9 +1782,6 @@ int main()
             objectA.transform.rotationDegrees += 50.0f * deltaTime;
             objectB.transform.rotationDegrees += 50.0f * deltaTime;
             objectD.transform.position = glm::vec3( pointLightB.position.x, pointLightB.position.y, pointLightB.position.z );
-
-            // objectD.transform.position.x = 18.0f * glm::cos(lightAngle);
-            // objectD.transform.position.z = 18.0f * glm::sin(lightAngle);
 
 // -------------------------------------------------
 // DERIVE FRAME DATA
@@ -1763,13 +1864,6 @@ int main()
             glUniformMatrix4fv( viewLocation, 1, GL_FALSE, glm::value_ptr(view) );
             glUniformMatrix4fv( projectionLocation, 1, GL_FALSE, glm::value_ptr(projection) );
             glUniform3fv( cameraPositionLocation, 1, glm::value_ptr(camera.position) );
-            //glUniform3fv( lightDirectionLocation, 1, glm::value_ptr(lightDirection) );
-            // glUniform3fv( pointLightPositionLocation, 1, glm::value_ptr(pointLight.position) );
-            // glUniform3fv( lightColorLocation, 1, glm::value_ptr(lightColor) );
-            // glUniform3fv( lightColorLocation, 1, glm::value_ptr(pointLight.color) );
-            //glUniform1f( lightIntensityLocation, lightIntensity );
-            // glUniform1f( lightIntensityLocation, pointLight.intensity );
-            // glUniform1f( pointLightRadiusLocation, pointLight.radius );
 
             glUniform3fv( pointLightAPositionLocation, 1, glm::value_ptr(pointLightA.position) );
             glUniform3fv( pointLightAColorLocation, 1, glm::value_ptr(pointLightA.color) );
@@ -1780,6 +1874,11 @@ int main()
             glUniform3fv( pointLightBColorLocation, 1, glm::value_ptr(pointLightB.color) );
             glUniform1f( pointLightBIntensityLocation, pointLightB.intensity );
             glUniform1f( pointLightBRadiusLocation, pointLightB.radius );
+
+            glUniform3fv( SunLightPositionLocation, 1, glm::value_ptr(sun.position) );
+            glUniform3fv( SunLightColorLocation, 1, glm::value_ptr(sun.color) );
+            glUniform1f( SunLightIntensityLocation, sun.intensity );
+            glUniform1f( SunLightAngleLocation, sun.angle );
 
 // -------------------------------------------------
 // TEXTURE STUFF
