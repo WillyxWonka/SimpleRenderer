@@ -53,3 +53,21 @@ add_custom_command(
         "${PROJECT_SOURCE_DIR}/assets"
         "$<TARGET_FILE_DIR:SimpleRenderer>/assets"
 )
+
+set(IMGUI_DIR ${CMAKE_SOURCE_DIR}/external/imgui )
+
+target_sources(SimpleRenderer PRIVATE
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+
+    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+)
+
+target_include_directories(SimpleRenderer PRIVATE
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+)

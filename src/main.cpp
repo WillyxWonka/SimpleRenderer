@@ -19,6 +19,10 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <filesystem>
 
+#include <imgui.h>
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "../include/stb_image.h"
 
@@ -1364,6 +1368,7 @@ int main()
     }
 
     std::cout << "Loaded OpenGL " << GLAD_VERSION_MAJOR(version) << '.' << GLAD_VERSION_MINOR(version) << '\n';
+
               
 // ---------------------------------------------
 // OPENGL RESOURCE LIFETIME START BRACKET <----
@@ -1372,6 +1377,22 @@ int main()
         glfwSetMouseButtonCallback(window, mouse_click_camera_drag_callBack);
         glfwSetCursorPosCallback(window, mouse_pos_change_callBack);
         glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
+
+
+// ---------------------------------------------
+// IMGUI
+// ---------------------------------------------
+        IMGUI_CHECKVERSION();
+
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        ImGui::StyleColorsDark();
+
+        ImGui_ImplGlfw_InitForOpenGL( window, true );
+        ImGui_ImplOpenGL3_Init( "#version 330 core" );
+// ---------------------------------------------
+// IMGUI END
+// ---------------------------------------------
 
         int framebufferWidth = 0;
         int framebufferHeight = 0;
@@ -1830,23 +1851,11 @@ int main()
             );
         }
 
-        // for (Renderable& part : orcRenderables)
-        // {
-        //     opaqueScene.push_back(
-        //         &part
-        //     );
-        // }
-
         double previousTime = glfwGetTime();
 
-        //glm::vec3 sunDirection = glm::normalize(sun.position);
-        //float sunHeightFactor = glm::clamp(sun.position.y, 0.0f, 1.0f);
-       
         glm::vec3 skyColor = glm::mix( lowSkyColor, highSkyColor, elevation);
 
-        // 2. Pass the four separate floats directly to glClearColor
         glClearColor( skyColor.r, skyColor.g, skyColor.b, 1.0f );
-
 
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_CULL_FACE);
@@ -1875,6 +1884,14 @@ int main()
 // UPDATE UPDATE UPDATE UPDATE UPDATE UPDATE 
 // -------------------------------------------------
 
+        // -------------------------
+        // BEGIN IMGUI FRAME
+        // -------------------------
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+        ImGui::ShowDemoWindow();
+        
     // Camera state
             ProcessCameraInput( window, deltaTime, camera);
 
@@ -1898,7 +1915,7 @@ int main()
             const glm::vec3 cameraUp = glm::normalize( glm::cross( cameraRight, cameraForward ) );
 
             // Runtime grass spawning
-            const bool gIsDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+            const bool gIsDown = glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS;
 
             if (gIsDown && !gWasDown)
             {
@@ -1958,7 +1975,7 @@ int main()
             const glm::mat4 view = BuildViewMatrix( camera.position, cameraForward, cameraUp );
             const glm::mat4 projection = BuildProjectionMatrix( framebufferWidth, framebufferHeight, camera );
 // -------------------------------------------------
-// BEGIN RENDER
+// BEGIN RENDER ZEBRA
 // -------------------------------------------------
 
             glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
@@ -2036,6 +2053,12 @@ int main()
             }
             glDepthMask(GL_TRUE);
 
+            // -------------------------
+            // RENDER IMGUI
+            // -------------------------
+            ImGui::Render();
+            ImGui_ImplOpenGL3_RenderDrawData( ImGui::GetDrawData() );
+
 // -------------------------------------------------
 // Present
 // -------------------------------------------------
@@ -2045,10 +2068,14 @@ int main()
 // -------------------------------------------------
 // Cleanup
 // -------------------------------------------------
-        glDeleteProgram(shaderProgram);
-    }
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
 
-//SCOPE END
+        glDeleteProgram(shaderProgram);
+    } //SCOPE END 
+        // Mesh / Texture RAII destruction triggered here
+
     glfwDestroyWindow(window);
     glfwTerminate();
 
