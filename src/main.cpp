@@ -35,7 +35,8 @@ namespace
     constexpr float CAMERA_FOV = 65.0f;
     constexpr float CAMERA_NEAR_PLANE = 0.1f;
     constexpr float CAMERA_FAR_PLANE = 300.0f;
-
+    
+    constexpr int MAX_POINT_LIGHTS = 8;
     float mouseSensitivity = 0.1f;
     
     struct Vertex
@@ -213,6 +214,8 @@ namespace
 
         float yaw;
         float pitch;
+
+        float orthoSize;
     };
     struct ObjVertexIndex
     {
@@ -244,6 +247,18 @@ namespace
         std::vector<std::string> triangleMaterials;
         std::vector<ObjSubmesh> submeshes;
     };
+   
+    struct ModelPart
+    {
+        const Mesh* mesh;
+        const Material* material;
+    };
+    struct Model
+    {
+        Transform transform;
+
+        std::vector<ModelPart> parts;
+    };
 
     const glm::vec3 worldUp
     {
@@ -262,13 +277,55 @@ namespace
     };
     struct SunLight
     {
-        glm::vec3 position;
+        glm::vec3 direction;
         glm::vec3 color;
 
         float intensity;
-        float angle;
     };
 
+    struct PointLightUniformLocations
+    {
+        // notice are ints because they are openGL shader location values...
+        int position = -1;;
+        int color = -1;;
+        int intensity = -1;;
+        int radius = -1;;
+    };
+    struct SunLightUniformLocations
+    {
+        int direction = -1;;
+        int color = -1;;
+        int intensity = -1;;
+    };
+    struct MaterialUniformLocations
+    {
+        int color = -1;
+        int opacity = -1;
+
+        int specularStrength = -1;
+        int shininess = -1;
+
+        int uvOffset = -1;
+        int uvScale = -1;
+        int uvTiling = -1;
+    };
+    struct ShaderUniformLocations
+    {
+        int model = -1;
+        int view = -1;
+        int projection = -1;
+
+        int cameraPosition = -1;
+        int textureSampler = -1;
+
+        MaterialUniformLocations material;
+        SunLightUniformLocations sun;
+
+        int pointLightCount = -1; //pointLights.size()
+
+        std::array< PointLightUniformLocations, MAX_POINT_LIGHTS > pointLights;
+    };
+    
     glm::vec3 CalculateCameraForward(float yawDegrees, float pitchDegrees)
     {
         const float yaw = glm::radians(yawDegrees);
@@ -285,9 +342,8 @@ namespace
     }
 
 
-    // mouse call backs for click to drag mouse camera functionality 
+    /////// mouse call backs for click to drag mouse camera functionality 
     bool IsDown;
-    bool isDragging = false;
     
     double prevX = 0.0f;
     double prevY = 0.0f;
@@ -316,8 +372,6 @@ namespace
                 prevX = 0.0f;
                 prevY = 0.0f;
                 prevPos = glm::vec2(0.0f, 0.0f);
-                
-                isDragging = false;
 
                 mouseDelta = glm::vec2(0.0f);
                 std::cout << "unclick\n"; 
@@ -329,15 +383,15 @@ namespace
             return;
         }
         if(IsDown){
-            isDragging = true;
             mouseDelta.x += prevPos.x - xPos;
             mouseDelta.y += prevPos.y - yPos;
             
             prevPos = glm::vec2(xPos, yPos);
-            std::cout << "\n" << "XDragging :" <<mouseDelta.x  << "\n" <<"YDragging :" << mouseDelta.y << "\n"  ;  
+            // std::cout << "\n" << "XDragging :" <<mouseDelta.x  << "\n" <<"YDragging :" << mouseDelta.y << "\n"  ;  
         }
     }
-
+    /////////////////
+    
     constexpr std::array<Vertex, 24> CUBE_INDEXED_VERTICES =
     {{
         // Front: 0-3  normal = +Z
@@ -466,9 +520,6 @@ namespace
         
         out vec4 fragmentColor;
 
-        uniform float lightIntensity;
-        uniform vec3 lightColor;
-
         uniform vec3 cameraPosition;
 
         uniform sampler2D textureSampler;
@@ -492,15 +543,12 @@ namespace
         };
         struct SunLight
         {
-            vec3 position;
+            vec3 direction;
             vec3 color;
 
             float intensity;
-            float angle;
         };
 
-        uniform PointLight pointLightA;
-        uniform PointLight pointLightB;
         uniform SunLight sun;
 
         const int MAX_POINT_LIGHTS = 8;
@@ -538,19 +586,10 @@ namespace
             attenuation *= attenuation;
 
             // //the more basic light produced
-            vec3 diffuseLight =
-                light.color
-                * diffuse
-                * light.intensity
-                * attenuation;
+            vec3 diffuseLight = light.color * diffuse * light.intensity * attenuation;
            
             // hihglights on models materials from shininess values
-            vec3 specularLight =
-                light.color
-                * light.intensity
-                * specularStrength
-                * specular
-                * attenuation;
+            vec3 specularLight = light.color * light.intensity * specularStrength * specular * attenuation;
                  
             return baseColor * diffuseLight + specularLight;
         }
@@ -558,7 +597,7 @@ namespace
         vec3 CalculateSunLight(SunLight light, vec3 N, vec3 V, vec3 baseColor){
             
             // Same sunlight direction for every fragment.
-            vec3 L = normalize(light.position);
+            vec3 L = normalize(light.direction);
 
             // Is this surface facing the sun?
             float diffuse = max(dot(N, L), 0.0);
@@ -573,19 +612,10 @@ namespace
                 specular = pow( max(dot(R, V), 0.0), shininess );
             }
             // //the more basic light produced
-            vec3 diffuseLight =
-                light.color
-                * diffuse
-                * light.intensity
-                * sunHeight;
+            vec3 diffuseLight = light.color * diffuse * light.intensity * sunHeight;
            
             // hihglights on models materials from shininess values
-            vec3 specularLight =
-                light.color
-                * light.intensity
-                * specularStrength
-                * specular
-                * sunHeight;
+            vec3 specularLight = light.color * light.intensity * specularStrength * specular * sunHeight;
                  
             return baseColor * diffuseLight + specularLight;
         }
@@ -605,8 +635,6 @@ namespace
             vec3 pointLighting = vec3(0.0);
             vec3 sunLight = vec3(0.0);
 
-            // pointLighting += CalculatePointLight( pointLightA, N, V, baseColor );
-            // pointLighting += CalculatePointLight( pointLightB, N, V, baseColor );
             for (int i = 0; i < pointLightCount; ++i)
             {
                 pointLighting += CalculatePointLight( pointLights[i], N, V, baseColor );
@@ -706,6 +734,7 @@ namespace
             camera.position = glm::vec3(0.0f, 5.0f, 0.0f);
             camera.yaw = -90.0f;
             camera.pitch = 0.0f;
+            camera.orthoSize = 10.0f;
         }
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         {
@@ -731,7 +760,9 @@ namespace
         camera.yaw -= mouseDelta.x * mouseSensitivity;
         camera.pitch += mouseDelta.y * mouseSensitivity;
         mouseDelta = glm::vec2(0.0f);
-        
+
+        const float zoomSpeed = 8.0f;
+
         camera.pitch = glm::clamp( camera.pitch, -89.0f, 89.0f );
         glm::vec3 cameraForward = CalculateCameraForward(camera.yaw, camera.pitch);
 
@@ -748,11 +779,13 @@ namespace
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         {
             camera.position += cameraForward * cameraMovement;
+            camera.orthoSize -= zoomSpeed * deltaTime;
         }
 
         if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
         {
             camera.position -= cameraForward * cameraMovement;
+            camera.orthoSize += zoomSpeed * deltaTime;
         }
 
         if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
@@ -773,6 +806,12 @@ namespace
         {
             camera.position  -= cameraUp * cameraMovement;
         }
+
+        camera.orthoSize = glm::clamp(
+            camera.orthoSize,
+            1.0f,
+            100.0f
+        );
     }
     
     glm::mat4 BuildViewMatrix( const glm::vec3& cameraPosition, const glm::vec3&    cameraForward, const glm::vec3& cameraUp)
@@ -783,12 +822,24 @@ namespace
             cameraUp
         );
     }
-    glm::mat4 BuildProjectionMatrix(int framebufferWidth, int framebufferHeight)
+    glm::mat4 BuildProjectionMatrix(int framebufferWidth, int framebufferHeight, Camera& camera)
     {
         const float aspectRatio =
             static_cast<float>(framebufferWidth) /
             static_cast<float>(framebufferHeight);
+        
+        // //if ortho projection
+        // const float orthoHeight = camera.orthoSize;
+        // const float orthoWidth = orthoHeight * aspectRatio;
 
+        // return glm::ortho(
+        //     -orthoWidth,
+        //     orthoWidth,
+        //     -orthoHeight,
+        //     orthoHeight,
+        //     CAMERA_NEAR_PLANE,
+        //     CAMERA_FAR_PLANE
+        // );
         return glm::perspective(
             glm::radians(CAMERA_FOV),
             aspectRatio,
@@ -847,12 +898,7 @@ namespace
 
         if (pixels == nullptr)
         {
-            std::cerr
-                << "Failed to load texture: "
-                << filePath
-                << '\n'
-                << stbi_failure_reason()
-                << '\n';
+            std::cerr << "Failed to load texture: " << filePath << '\n' << stbi_failure_reason() << '\n';
             return texture;
         }
 
@@ -873,31 +919,101 @@ namespace
         return texture;
     }
 
-    void DrawRenderable( const Renderable& object, int modelLocation, int materialColorLocation,int materialOpacityLocation, int specularStrengthLocation, int shininessLocation, int uvOffsetLocation, int uvScaleLocation, int uvTilingLocation)
+    ShaderUniformLocations GetShaderUniformLocations( unsigned int shaderProgram )
     {
-        const glm::mat4 model = BuildModelMatrix(object.transform);
+        ShaderUniformLocations locations;
 
-        glUniform3fv( materialColorLocation, 1, glm::value_ptr(object.material->color) );
-        glUniform1f( materialOpacityLocation, object.material->opacity );
-        glUniform1f( specularStrengthLocation, object.material->specularStrength );
-        glUniform1f( shininessLocation, object.material->shininess );
-        glUniformMatrix4fv( modelLocation, 1, GL_FALSE, glm::value_ptr(model) );
-        glUniform2fv( uvOffsetLocation, 1, glm::value_ptr(object.material->uvOffset) );
-        glUniform2fv( uvScaleLocation, 1, glm::value_ptr(object.material->uvScale) );
-        glUniform2fv( uvTilingLocation, 1, glm::value_ptr(object.material->uvTiling) );
-        
-        glBindTexture( GL_TEXTURE_2D, object.material->texture->id );
-        glBindVertexArray( object.mesh->vao );
-        glDrawElements( GL_TRIANGLES, object.mesh->indicesCount, GL_UNSIGNED_INT, nullptr );
+        locations.model = glGetUniformLocation( shaderProgram, "model" );
+        locations.view = glGetUniformLocation( shaderProgram, "view" );
+        locations.projection = glGetUniformLocation( shaderProgram, "projection" );
+
+        locations.cameraPosition = glGetUniformLocation( shaderProgram, "cameraPosition" );
+
+        locations.textureSampler = glGetUniformLocation( shaderProgram, "textureSampler" );
+
+        // Material uniform locations
+        locations.material.color = glGetUniformLocation( shaderProgram, "materialColor" );
+        locations.material.opacity = glGetUniformLocation( shaderProgram, "materialOpacity" );
+        locations.material.specularStrength = glGetUniformLocation( shaderProgram, "specularStrength" );
+        locations.material.shininess = glGetUniformLocation( shaderProgram, "shininess" );
+
+        locations.material.uvOffset = glGetUniformLocation( shaderProgram, "uvOffset" );
+        locations.material.uvScale = glGetUniformLocation( shaderProgram, "uvScale" );
+        locations.material.uvTiling = glGetUniformLocation( shaderProgram, "uvTiling" );
+        //sun light uniform locations
+        locations.sun.direction = glGetUniformLocation( shaderProgram, "sun.direction" );
+        locations.sun.color = glGetUniformLocation( shaderProgram, "sun.color" );
+        locations.sun.intensity = glGetUniformLocation( shaderProgram, "sun.intensity" );
+
+        //point light uniform locations
+        locations.pointLightCount = glGetUniformLocation( shaderProgram, "pointLightCount" );
+
+        for (int i = 0; i < MAX_POINT_LIGHTS; ++i)
+        {
+            const std::string prefix = "pointLights[" + std::to_string(i) + "]";
+            locations.pointLights[i].position = glGetUniformLocation( shaderProgram, (prefix + ".position").c_str() );
+            locations.pointLights[i].color = glGetUniformLocation( shaderProgram, (prefix + ".color").c_str() );
+            locations.pointLights[i].intensity = glGetUniformLocation( shaderProgram, (prefix + ".intensity").c_str() );
+            locations.pointLights[i].radius = glGetUniformLocation( shaderProgram, (prefix + ".radius").c_str() );
+        }
+
+    return locations;
+}
+
+
+    void DrawMeshPart( const Mesh& mesh, const Material& material, const glm::mat4& modelMatrix, const ShaderUniformLocations& uniforms )
+    {
+        glUniform3fv( uniforms.material.color, 1, glm::value_ptr(material.color) );
+        glUniform1f( uniforms.material.opacity, material.opacity );
+        glUniform1f( uniforms.material.specularStrength, material.specularStrength );
+        glUniform1f( uniforms.material.shininess, material.shininess );
+        glUniformMatrix4fv( uniforms.model, 1, GL_FALSE, glm::value_ptr(modelMatrix) );
+        glUniform2fv( uniforms.material.uvOffset, 1, glm::value_ptr(material.uvOffset) );
+        glUniform2fv( uniforms.material.uvScale, 1, glm::value_ptr(material.uvScale) );
+        glUniform2fv( uniforms.material.uvTiling, 1, glm::value_ptr(material.uvTiling) );
+    
+        glBindTexture( GL_TEXTURE_2D, material.texture->id );
+        glBindVertexArray(mesh.vao);
+
+        glDrawElements( GL_TRIANGLES, mesh.indicesCount, GL_UNSIGNED_INT, nullptr );
     }
+    void DrawModel( const Model& model, const ShaderUniformLocations& uniforms )
+    {
+        const glm::mat4 modelMatrix = BuildModelMatrix( model.transform );
+
+        for (const ModelPart& part : model.parts)
+        {
+            DrawMeshPart( *part.mesh, *part.material, modelMatrix, uniforms );
+        }
+    }
+    void DrawRenderable( const Renderable& object, const ShaderUniformLocations& uniforms )
+    {
+        //const glm::mat4 model = BuildModelMatrix(object.transform);
+       
+        const glm::mat4 modelMatrix = BuildModelMatrix( object.transform );
+        DrawMeshPart( *object.mesh, *object.material, modelMatrix, uniforms );
+        
+        // glUniform3fv( uniforms.material.color, 1, glm::value_ptr(object.material->color) );
+        // glUniform1f( uniforms.material.opacity, object.material->opacity );
+        // glUniform1f( uniforms.material.specularStrength, object.material->specularStrength );
+        // glUniform1f( uniforms.material.shininess, object.material->shininess );
+        // glUniformMatrix4fv( uniforms.model, 1, GL_FALSE, glm::value_ptr(model) );
+
+        // glUniform2fv( uniforms.material.uvOffset, 1, glm::value_ptr(object.material->uvOffset) );
+        // glUniform2fv( uniforms.material.uvScale, 1, glm::value_ptr(object.material->uvScale) );
+        // glUniform2fv( uniforms.material.uvTiling, 1, glm::value_ptr(object.material->uvTiling) );
+        
+        // glBindTexture( GL_TEXTURE_2D, object.material->texture->id );
+        // glBindVertexArray( object.mesh->vao );
+        
+        // glDrawElements( GL_TRIANGLES, object.mesh->indicesCount, GL_UNSIGNED_INT, nullptr );
+    }
+
 
     Mesh CreateMesh( const Vertex* vertices, std::size_t vertexCount, const unsigned int* indices, std::size_t indicesCount )
     {
         Mesh mesh;
         mesh.indicesCount = static_cast<GLsizei>(indicesCount);
-        // {
-        //     0, 0, 0, static_cast<GLsizei>(indicesCount)
-        // };
 
         glGenVertexArrays( 1, &mesh.vao );
         glGenBuffers( 1, &mesh.vbo );
@@ -1188,7 +1304,6 @@ namespace
         if (existing != cache.end())
         {
             std::cout << "Texture cache HIT: " << cacheKey << '\n';
-
             return &existing->second;
         }
 
@@ -1202,11 +1317,11 @@ namespace
         auto inserted = cache.emplace(cacheKey, std::move(texture));
 
         std::cout << "Texture cache MISS - loaded: " << cacheKey << '\n';
-
         return &inserted.first->second;
     }
-}
+    
 
+}
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------
 // 
@@ -1251,7 +1366,7 @@ int main()
     std::cout << "Loaded OpenGL " << GLAD_VERSION_MAJOR(version) << '.' << GLAD_VERSION_MINOR(version) << '\n';
               
 // ---------------------------------------------
-// OPENGL RESOURCE LIFETIME
+// OPENGL RESOURCE LIFETIME START BRACKET <----
 // ---------------------------------------------
     {
         glfwSetMouseButtonCallback(window, mouse_click_camera_drag_callBack);
@@ -1333,8 +1448,15 @@ int main()
             glm::vec3(0.0f, 1.0f, 0.0f)
         };
 
-        std::vector<Renderable> orcRenderables;
-        orcRenderables.reserve( orc_Obj.submeshes.size() );
+        // std::vector<Renderable> orcRenderables;
+        // orcRenderables.reserve( orc_Obj.submeshes.size() );
+        
+        Model orcModel
+        {
+            orcTransform,
+            {}
+        };
+        orcModel.parts.reserve( orc_Obj.submeshes.size() );
 
         for (std::size_t i = 0; i < orc_Obj.submeshes.size(); ++i)
         {
@@ -1347,10 +1469,11 @@ int main()
                 continue;
             }
 
-            orcRenderables.push_back(
-                Renderable
+            orcModel.parts.push_back(
+                ModelPart
                 {
-                    &orcMeshes[i], &orcMaterials[materialIndex], orcTransform
+                    &orcMeshes[i],
+                    &orcMaterials[materialIndex]
                 }
             );
         }
@@ -1380,9 +1503,8 @@ int main()
 
         float lightAngle = 0.0f;
         std::vector<PointLight> pointLights;
-        // pointLights.reserve(2);
 
-        float elevation = glm::radians(65.0f);
+        float elevation = glm::radians(5.0f);
         float azimuth   = glm::radians(45.0f); // xz-plane
 
         //CAMERA 
@@ -1390,14 +1512,16 @@ int main()
         {
             glm::vec3(0.0f, 7.5f, 5.0f),
             -90.0f,
-            0.0f
+            0.0f,
+
+            10.0f
         };
 
         //LIGHTS - SUN - SKY
         PointLight pointLightA
         {
             glm::vec3(0.0f, 7.25f, -5.0f),
-            glm::vec3(1.0f, 0.125f, 0.150f),
+            glm::vec3(1.0f, 1.0f,  1.0f),
 
             25.0f,
             10.0f
@@ -1410,9 +1534,18 @@ int main()
             18.0f,
             12.0f
         };
-        
+        PointLight pointLightC
+        {
+            glm::vec3(-12.0f, 7.0f, -5.0f),
+            glm::vec3(1.0f, 0.15f, 0.75f),
+
+            38.0f,
+            18.0f
+        };
+
         pointLights.push_back(pointLightA);
         pointLights.push_back(pointLightB);
+        pointLights.push_back(pointLightC);
 
         glm::vec3 lowSkyColor =
         {
@@ -1433,8 +1566,7 @@ int main()
             glm::vec3(sunDirection),
             glm::vec3(glm::mix( lowSkyColor, highSkyColor, elevation)),
 
-            5.0f ,
-            45.0f
+            5.0f 
         };
 // -------------------------------------------------
 // Mesh GPU resources
@@ -1476,36 +1608,9 @@ int main()
 // -------------------------------------------------
 //UNIFORM LOCATIONS
 // -------------------------------------------------
-        const int modelLocation =          glGetUniformLocation(shaderProgram, "model");
-        const int viewLocation =           glGetUniformLocation(shaderProgram, "view");
-        const int projectionLocation =     glGetUniformLocation(shaderProgram, "projection");
-        const int cameraPositionLocation = glGetUniformLocation(shaderProgram, "cameraPosition");
 
-        const int shininessLocation =       glGetUniformLocation(shaderProgram, "shininess");
-        const int specularStrengthLocation = glGetUniformLocation(shaderProgram, "specularStrength");
-        const int materialColorLocation = glGetUniformLocation( shaderProgram, "materialColor" );
-        const int materialOpacityLocation = glGetUniformLocation( shaderProgram, "materialOpacity" );
-
-        const int textureSamplerLocation = glGetUniformLocation(shaderProgram,"textureSampler" );
-        const int uvOffsetLocation = glGetUniformLocation( shaderProgram, "uvOffset" );
-        const int uvScaleLocation = glGetUniformLocation( shaderProgram, "uvScale" );
-        const int uvTilingLocation = glGetUniformLocation( shaderProgram, "uvTiling" );
-
-        const int pointLightAPositionLocation = glGetUniformLocation( shaderProgram, "pointLightA.position" );
-        const int pointLightAColorLocation = glGetUniformLocation( shaderProgram, "pointLightA.color" );
-        const int pointLightAIntensityLocation = glGetUniformLocation( shaderProgram, "pointLightA.intensity" );
-        const int pointLightARadiusLocation = glGetUniformLocation( shaderProgram, "pointLightA.radius" ); 
-
-        const int pointLightBPositionLocation = glGetUniformLocation( shaderProgram, "pointLightB.position" );
-        const int pointLightBColorLocation = glGetUniformLocation( shaderProgram, "pointLightB.color" );
-        const int pointLightBIntensityLocation = glGetUniformLocation( shaderProgram, "pointLightB.intensity" );
-        const int pointLightBRadiusLocation = glGetUniformLocation( shaderProgram, "pointLightB.radius" );
-
-        const int SunLightPositionLocation = glGetUniformLocation( shaderProgram, "sun.position" );
-        const int SunLightColorLocation = glGetUniformLocation( shaderProgram, "sun.color" );
-        const int SunLightIntensityLocation = glGetUniformLocation( shaderProgram, "sun.intensity" );
-        const int SunLightAngleLocation = glGetUniformLocation( shaderProgram, "sun.angle" );
-        
+        const ShaderUniformLocations uniforms = GetShaderUniformLocations( shaderProgram );
+       
 // -------------------------------------------------
 // Scene state
 // -------------------------------------------------
@@ -1725,12 +1830,12 @@ int main()
             );
         }
 
-        for (Renderable& part : orcRenderables)
-        {
-            opaqueScene.push_back(
-                &part
-            );
-        }
+        // for (Renderable& part : orcRenderables)
+        // {
+        //     opaqueScene.push_back(
+        //         &part
+        //     );
+        // }
 
         double previousTime = glfwGetTime();
 
@@ -1750,9 +1855,10 @@ int main()
         glEnable(GL_BLEND);
         glBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
 
-// -------------------------------------------------
-// APPLICATION LOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOP
-// -------------------------------------------------
+// -------------------------------------------------------------------------------------
+//  APPLICATION LOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOP
+//  APPLICATION LOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOP
+// -------------------------------------------------------------------------------------
         while (!glfwWindowShouldClose(window))
         {
 
@@ -1775,13 +1881,14 @@ int main()
     // LIGHT STATE
             lightAngle += deltaTime * 0.5f;
         
-            pointLightB.position.x = 15.0f * glm::cos(lightAngle);
-            pointLightB.position.z = 15.0f * glm::sin(lightAngle);
+            pointLights[1].position.x = 15.0f * glm::cos(lightAngle);
+            pointLights[1].position.z = 15.0f * glm::sin(lightAngle);
 
     // Object state
             objectA.transform.rotationDegrees += 50.0f * deltaTime;
             objectB.transform.rotationDegrees += 50.0f * deltaTime;
-            objectD.transform.position = glm::vec3( pointLightB.position.x, pointLightB.position.y, pointLightB.position.z );
+            objectD.transform.position = glm::vec3( pointLights[1].position.x, pointLightB.position.y, pointLights[1].position.z );
+            orcModel.transform.rotationDegrees += 25.0f * deltaTime;
 
 // -------------------------------------------------
 // DERIVE FRAME DATA
@@ -1849,7 +1956,7 @@ int main()
             }
 
             const glm::mat4 view = BuildViewMatrix( camera.position, cameraForward, cameraUp );
-            const glm::mat4 projection = BuildProjectionMatrix( framebufferWidth, framebufferHeight );
+            const glm::mat4 projection = BuildProjectionMatrix( framebufferWidth, framebufferHeight, camera );
 // -------------------------------------------------
 // BEGIN RENDER
 // -------------------------------------------------
@@ -1861,24 +1968,30 @@ int main()
 // FRAME-WIDE UNIFORMS
 // -------------------------------------------------
             
-            glUniformMatrix4fv( viewLocation, 1, GL_FALSE, glm::value_ptr(view) );
-            glUniformMatrix4fv( projectionLocation, 1, GL_FALSE, glm::value_ptr(projection) );
-            glUniform3fv( cameraPositionLocation, 1, glm::value_ptr(camera.position) );
+            glUniformMatrix4fv( uniforms.view, 1, GL_FALSE, glm::value_ptr(view) );
+            glUniformMatrix4fv( uniforms.projection, 1, GL_FALSE, glm::value_ptr(projection) );
+            glUniform3fv( uniforms.cameraPosition, 1, glm::value_ptr(camera.position) );
 
-            glUniform3fv( pointLightAPositionLocation, 1, glm::value_ptr(pointLightA.position) );
-            glUniform3fv( pointLightAColorLocation, 1, glm::value_ptr(pointLightA.color) );
-            glUniform1f( pointLightAIntensityLocation, pointLightA.intensity );
-            glUniform1f( pointLightARadiusLocation, pointLightA.radius );
+            const int activePointLightCount = static_cast<int>( std::min<std::size_t>( pointLights.size(), MAX_POINT_LIGHTS ) );
+            
+            glUniform1i( uniforms.pointLightCount, activePointLightCount );
 
-            glUniform3fv( pointLightBPositionLocation, 1, glm::value_ptr(pointLightB.position) );
-            glUniform3fv( pointLightBColorLocation, 1, glm::value_ptr(pointLightB.color) );
-            glUniform1f( pointLightBIntensityLocation, pointLightB.intensity );
-            glUniform1f( pointLightBRadiusLocation, pointLightB.radius );
+            for (int i = 0; i < activePointLightCount; ++i) 
+            {
+                // Reference to the current point light's actual values, such as position, color, and intensity.
+                const PointLight& light = pointLights[i];
+                // Reference to the cached OpenGL uniform locations used to upload this point light's values to the shader.
+                const PointLightUniformLocations& locations = uniforms.pointLights[i];
+                
+                glUniform3fv( locations.position, 1, glm::value_ptr(light.position) );
+                glUniform3fv( locations.color, 1, glm::value_ptr(light.color) );
+                glUniform1f( locations.intensity, light.intensity );
+                glUniform1f( locations.radius, light.radius );
+            }
 
-            glUniform3fv( SunLightPositionLocation, 1, glm::value_ptr(sun.position) );
-            glUniform3fv( SunLightColorLocation, 1, glm::value_ptr(sun.color) );
-            glUniform1f( SunLightIntensityLocation, sun.intensity );
-            glUniform1f( SunLightAngleLocation, sun.angle );
+            glUniform3fv( uniforms.sun.direction, 1, glm::value_ptr(sun.direction) );
+            glUniform3fv( uniforms.sun.color, 1, glm::value_ptr(sun.color) );
+            glUniform1f( uniforms.sun.intensity, sun.intensity );
 
 // -------------------------------------------------
 // TEXTURE STUFF
@@ -1886,26 +1999,19 @@ int main()
             //The texture unit currently configuring is unit 0.
             glActiveTexture(GL_TEXTURE0); 
             //textureSampler should sample from Texture Unit 0.
-            glUniform1i( textureSamplerLocation, 0 );
+            glUniform1i( uniforms.textureSampler, 0 );
 
 // -------------------------------------------------
-// DRAW CUBE MESH
+// DRAW MESHES
 // -------------------------------------------------
             glDepthMask(GL_TRUE);
+
             for (const Renderable* object : opaqueScene)
             {
-                DrawRenderable( 
-                    *object, 
-                    modelLocation,
-                    materialColorLocation, 
-                    materialOpacityLocation,
-                    specularStrengthLocation, 
-                    shininessLocation,
-                    uvOffsetLocation, 
-                    uvScaleLocation, 
-                    uvTilingLocation 
-                );
+                DrawRenderable( *object, uniforms );
             }
+
+            DrawModel( orcModel, uniforms );
             glDepthMask(GL_FALSE);
 
             std::sort(
@@ -1926,17 +2032,7 @@ int main()
 
             for (const Renderable& object : transparentScene)
             {
-                DrawRenderable( 
-                    object, 
-                    modelLocation,
-                    materialColorLocation, 
-                    materialOpacityLocation,
-                    specularStrengthLocation, 
-                    shininessLocation,
-                    uvOffsetLocation, 
-                    uvScaleLocation, 
-                    uvTilingLocation 
-                );
+                DrawRenderable( object, uniforms );
             }
             glDepthMask(GL_TRUE);
 
@@ -1952,6 +2048,7 @@ int main()
         glDeleteProgram(shaderProgram);
     }
 
+//SCOPE END
     glfwDestroyWindow(window);
     glfwTerminate();
 
