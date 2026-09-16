@@ -42,7 +42,8 @@ namespace
     
     constexpr int MAX_POINT_LIGHTS = 8;
     float mouseSensitivity = 0.1f;
-    
+    bool showImGuiDemo = false; // for imgui window toggle
+
     struct Vertex
     {
         // Position
@@ -201,6 +202,7 @@ namespace
     {
         glm::vec3 position;
         glm::vec3 scale;
+        float uniformScale;
 
         float rotationDegrees;
         glm::vec3 rotationAxis;
@@ -260,7 +262,7 @@ namespace
     struct Model
     {
         Transform transform;
-
+        
         std::vector<ModelPart> parts;
     };
 
@@ -286,7 +288,11 @@ namespace
 
         float intensity;
     };
-
+    struct SunDirection
+    {
+        float elevation;
+        float azimuth;
+    };
     struct PointLightUniformLocations
     {
         // notice are ints because they are openGL shader location values...
@@ -359,6 +365,12 @@ namespace
         if(button == GLFW_MOUSE_BUTTON_RIGHT){
 
             if (action == GLFW_PRESS) {
+            
+                if ( ImGui::GetCurrentContext() != nullptr && ImGui::GetIO().WantCaptureMouse )
+                {
+                    return;
+                }
+
                 glfwSetInputMode( window, GLFW_CURSOR, GLFW_CURSOR_DISABLED );
                 IsDown = true;
 
@@ -732,37 +744,19 @@ namespace
 
     void ProcessCameraInput(GLFWwindow* window, float deltaTime, Camera& camera)
     {
-        //resets camera positon
-        if (glfwGetKey(window, GLFW_KEY_0) == GLFW_PRESS)
-        {
-            camera.position = glm::vec3(0.0f, 5.0f, 0.0f);
-            camera.yaw = -90.0f;
-            camera.pitch = 0.0f;
-            camera.orthoSize = 10.0f;
-        }
+        ImGuiIO& io = ImGui::GetIO();
+
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
-        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
-        {
-            camera.yaw -= CAMERA_ROTATION_SPEED * deltaTime;
-        }
-        if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-        {
-            camera.yaw += CAMERA_ROTATION_SPEED * deltaTime;
-        }
-        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
-        {
-            camera.pitch += CAMERA_ROTATION_SPEED * deltaTime;
-        }
-        if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
-        {
-            camera.pitch -= CAMERA_ROTATION_SPEED * deltaTime;
-        }
 
-        camera.yaw -= mouseDelta.x * mouseSensitivity;
-        camera.pitch += mouseDelta.y * mouseSensitivity;
+        // Mouse ownership
+        if (!io.WantCaptureMouse)
+        {
+            camera.yaw -= mouseDelta.x * mouseSensitivity;
+            camera.pitch += mouseDelta.y * mouseSensitivity;
+        }
         mouseDelta = glm::vec2(0.0f);
 
         const float zoomSpeed = 8.0f;
@@ -773,49 +767,79 @@ namespace
         glm::vec3 cameraRight = glm::normalize( glm::cross(cameraForward, worldUp) );
         glm::vec3 cameraUp = glm::normalize( glm::cross(cameraRight, cameraForward) );
 
-        float cameraMovement = CAMERA_SPEED * deltaTime;
-
-        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+        // Keyboard ownership
+        if (!io.WantCaptureKeyboard)
         {
-            cameraMovement *= CAMERA_SPEED_BOOST;
-        }
+            //resets camera positon
+            if (glfwGetKey(window, GLFW_KEY_0) == GLFW_PRESS)
+            {
+                camera.position = glm::vec3(0.0f, 5.0f, 0.0f);
+                camera.yaw = -90.0f;
+                camera.pitch = 0.0f;
+                camera.orthoSize = 10.0f;
+            }
+            if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+            {
+                camera.yaw -= CAMERA_ROTATION_SPEED * deltaTime;
+            }
+            if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+            {
+                camera.yaw += CAMERA_ROTATION_SPEED * deltaTime;
+            }
+            if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+            {
+                camera.pitch += CAMERA_ROTATION_SPEED * deltaTime;
+            }
+            if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+            {
+                camera.pitch -= CAMERA_ROTATION_SPEED * deltaTime;
+            }
 
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        {
-            camera.position += cameraForward * cameraMovement;
-            camera.orthoSize -= zoomSpeed * deltaTime;
-        }
 
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        {
-            camera.position -= cameraForward * cameraMovement;
-            camera.orthoSize += zoomSpeed * deltaTime;
-        }
+            float cameraMovement = CAMERA_SPEED * deltaTime;
 
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        {
-            camera.position  += cameraRight * cameraMovement;
-        }
+            if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+            {
+                cameraMovement *= CAMERA_SPEED_BOOST;
+            }
 
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        {
-            camera.position  -= cameraRight * cameraMovement;
-        }
-        if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
-        {
-            camera.position  += cameraUp * cameraMovement;
-        }
+            if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+            {
+                camera.position += cameraForward * cameraMovement;
+                camera.orthoSize -= zoomSpeed * deltaTime;
+            }
 
-        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
-        {
-            camera.position  -= cameraUp * cameraMovement;
-        }
+            if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+            {
+                camera.position -= cameraForward * cameraMovement;
+                camera.orthoSize += zoomSpeed * deltaTime;
+            }
 
-        camera.orthoSize = glm::clamp(
-            camera.orthoSize,
-            1.0f,
-            100.0f
-        );
+            if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+            {
+                camera.position  += cameraRight * cameraMovement;
+            }
+
+            if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            {
+                camera.position  -= cameraRight * cameraMovement;
+            }
+            if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+            {
+                camera.position  += cameraUp * cameraMovement;
+            }
+
+            if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+            {
+                camera.position  -= cameraUp * cameraMovement;
+            }
+
+            camera.orthoSize = glm::clamp(
+                camera.orthoSize,
+                1.0f,
+                100.0f
+            );
+        }
     }
     
     glm::mat4 BuildViewMatrix( const glm::vec3& cameraPosition, const glm::vec3&    cameraForward, const glm::vec3& cameraUp)
@@ -868,7 +892,7 @@ namespace
 
         model = glm::scale(
             model,
-            transform.scale
+            transform.scale * transform.uniformScale
         );
 
         return model;
@@ -1013,7 +1037,6 @@ namespace
         // glDrawElements( GL_TRIANGLES, object.mesh->indicesCount, GL_UNSIGNED_INT, nullptr );
     }
 
-
     Mesh CreateMesh( const Vertex* vertices, std::size_t vertexCount, const unsigned int* indices, std::size_t indicesCount )
     {
         Mesh mesh;
@@ -1057,6 +1080,16 @@ namespace
         return mesh;
     }
 
+    glm::vec3 CalculateSunDirection(const SunDirection& sunDir){
+        const float elevation = glm::radians(sunDir.elevation);
+        const float azimuth = glm::radians(sunDir.azimuth);
+
+        return glm::vec3(
+            glm::cos(elevation) * glm::cos(azimuth),
+            glm::sin(elevation),
+            glm::cos(elevation) * glm::sin(azimuth)
+        );
+    };
 // -------------------------------------------------
 // OBJECT LOADING
 // -------------------------------------------------
@@ -1323,8 +1356,6 @@ namespace
         std::cout << "Texture cache MISS - loaded: " << cacheKey << '\n';
         return &inserted.first->second;
     }
-    
-
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1371,7 +1402,7 @@ int main()
 
               
 // ---------------------------------------------
-// OPENGL RESOURCE LIFETIME START BRACKET <----
+// OPENGL RESOURCE LIFETIME SCOPE START BRACKET <----
 // ---------------------------------------------
     {
         glfwSetMouseButtonCallback(window, mouse_click_camera_drag_callBack);
@@ -1380,7 +1411,7 @@ int main()
 
 
 // ---------------------------------------------
-// IMGUI
+// IMGUI INITIALIZE 
 // ---------------------------------------------
         IMGUI_CHECKVERSION();
 
@@ -1390,10 +1421,10 @@ int main()
 
         ImGui_ImplGlfw_InitForOpenGL( window, true );
         ImGui_ImplOpenGL3_Init( "#version 330 core" );
-// ---------------------------------------------
-// IMGUI END
-// ---------------------------------------------
 
+// ---------------------------------------------
+// GLFW VIEWPORT AND FRAMEBUFFER 
+// ---------------------------------------------
         int framebufferWidth = 0;
         int framebufferHeight = 0;
         glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
@@ -1464,6 +1495,7 @@ int main()
         {
             glm::vec3(0.0f, 0.0f, -10.0f),
             glm::vec3(1.0f),
+            1.0f,
 
             0.0f,
             glm::vec3(0.0f, 1.0f, 0.0f)
@@ -1525,9 +1557,6 @@ int main()
         float lightAngle = 0.0f;
         std::vector<PointLight> pointLights;
 
-        float elevation = glm::radians(5.0f);
-        float azimuth   = glm::radians(45.0f); // xz-plane
-
         //CAMERA 
         Camera camera
         {
@@ -1574,20 +1603,30 @@ int main()
         };
         glm::vec3 highSkyColor =
         {
-            .8f, .55f, .4f
+            .57f, .95f, 1.0f
         };
-        glm::vec3 sunDirection
+        SunDirection sunDir 
         {
-            std::cos(elevation) * std::cos(azimuth),
-            std::sin(elevation),
-            std::cos(elevation) * std::sin(azimuth)
+             45.0f,
+             45.0f
         };
-        SunLight sun
-        {
-            glm::vec3(sunDirection),
-            glm::vec3(glm::mix( lowSkyColor, highSkyColor, elevation)),
+        // SunLight sun
+        // {
+        //     glm::vec3(
+        //         std::cos(glm::radians(sunDir.elevation)) * std::cos(glm::radians(sunDir.azimuth)),
+        //         std::sin(glm::radians(sunDir.elevation)),
+        //         std::cos(glm::radians(sunDir.elevation)) * std::sin(glm::radians(sunDir.azimuth))
+        //     ),
+        //     glm::vec3(glm::mix( lowSkyColor, highSkyColor, glm::radians(sunDir.elevation))),
 
-            5.0f 
+        //     5.0f 
+        // };
+        SunLight sun // duplicate sun while creating the helper get direction function
+        {
+            CalculateSunDirection(sunDir),
+            glm::vec3(glm::vec3(1.0f)),
+
+            2.50f 
         };
 // -------------------------------------------------
 // Mesh GPU resources
@@ -1715,6 +1754,7 @@ int main()
             {
                 glm::vec3(1.5f, 5.0f, -5.0f),
                 glm::vec3(1.25f),
+                1.0f,
 
                 45.0f,
                 glm::vec3(1.0f, 1.0f, 0.0f)
@@ -1728,6 +1768,7 @@ int main()
             {
                 glm::vec3(-1.5f, 5.0f, -5.0f),
                 glm::vec3(1.0f),
+                1.0f,
 
                 0.0f,
                 glm::vec3(-1.0f, -1.0f, 0.0f)
@@ -1741,7 +1782,8 @@ int main()
             {
                 glm::vec3(0.0f, 0.0f, 0.0f),
                 glm::vec3(50.0f, 1.0f, 50.0f),
-
+                1.0f,
+                
                 0.0f,
                 glm::vec3(0.0f, 1.0f, 0.0f)
             }
@@ -1756,6 +1798,7 @@ int main()
             {
                 glm::vec3(0.0f, 7.0f, 0.0f),
                 glm::vec3(1.0f),
+                1.0f,
 
                 0.0f,
                 glm::vec3(0.0f, 1.0f, 0.0f)
@@ -1769,6 +1812,7 @@ int main()
             {
                 glm::vec3(-10.0f, 2.5f, -15.0f),
                 glm::vec3(5.0f),
+                1.0f,
 
                 0.0f,
                 glm::vec3(0.0f, 1.0f, 0.0f)
@@ -1782,6 +1826,7 @@ int main()
             {
                 glm::vec3(5.0f, 2.5f, -15.0f),
                 glm::vec3(5.0f),
+                1.0f,
 
                 0.0f,
                 glm::vec3(0.0f, 1.0f, 0.0f)
@@ -1795,6 +1840,7 @@ int main()
             {
                 glm::vec3(-5.0f, 1.5f, -15.0f),
                 glm::vec3(5.0f, 3.0f, 2.0f),
+                1.0f,
 
                 0.0f,
                 glm::vec3(0.0f, 1.0f, 0.0f)
@@ -1808,6 +1854,7 @@ int main()
             {
                 glm::vec3(0.0f, 1.5f, -15.0f),
                 glm::vec3(5.0f, 3.0f, 2.0f),
+                1.0f,
 
                 0.0f,
                 glm::vec3(0.0f, 1.0f, 0.0f)
@@ -1843,6 +1890,7 @@ int main()
                     {
                         glm::vec3(x, .5f, -8.0f),
                         glm::vec3(1.0f),
+                        1.0f,
 
                         0.0f,
                         glm::vec3(0.0f, 1.0f, 0.0f)
@@ -1853,7 +1901,7 @@ int main()
 
         double previousTime = glfwGetTime();
 
-        glm::vec3 skyColor = glm::mix( lowSkyColor, highSkyColor, elevation);
+        glm::vec3 skyColor = glm::mix( lowSkyColor, highSkyColor, sunDir.elevation/90.0f);
 
         glClearColor( skyColor.r, skyColor.g, skyColor.b, 1.0f );
 
@@ -1870,7 +1918,6 @@ int main()
 // -------------------------------------------------------------------------------------
         while (!glfwWindowShouldClose(window))
         {
-
 // -------------------------------------------------
 // Events + Time
 // -------------------------------------------------
@@ -1884,14 +1931,81 @@ int main()
 // UPDATE UPDATE UPDATE UPDATE UPDATE UPDATE 
 // -------------------------------------------------
 
-        // -------------------------
-        // BEGIN IMGUI FRAME
-        // -------------------------
-        ImGui_ImplOpenGL3_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-        ImGui::ShowDemoWindow();
+    // ------------------------- -------------------------
+    // BEGIN IMGUI FRAME!!!!
+    // ------------------------- -------------------------
+            ImGui_ImplOpenGL3_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
+            
+            ImGui::Begin("ZEBRA Debug");
+            ImGui::Text("ZEBRA Engine");
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0, 1, 0, 1)); // Set text color 
+            ImGui::Text("FPS: %.1f", io.Framerate); // <-- nice
+            ImGui::PopStyleColor();
+            
+            ImGui::Checkbox( "Show ImGui Demo", &showImGuiDemo );
+
+        /*IMGUI SUNLIGHT*/
+
+        if (ImGui::CollapsingHeader("Sun"))
+        {
+            //When you drag the slider, ImGui writes a new float directly into your existing SunLight.
+            ImGui::SliderFloat( "Sun Intensity", &sun.intensity, 0.0f, 10.0f );
+            ImGui::SliderFloat( "Sun elevation", &sunDir.elevation, 0.0f, 90.0f );
+            ImGui::SliderFloat( "Sun azimuth (xz-plane)", &sunDir.azimuth, 0.0f, 360.0f );
+            // sun.color is a glm::vec3 and glm::value_ptr gives ImGui a pointer to the first of those floats.
+            ImGui::ColorEdit3( "Sun Color", glm::value_ptr(sun.color));
+            ImGui::ColorEdit3( "Low Sky Color", glm::value_ptr(lowSkyColor));
+            ImGui::ColorEdit3( "High Sky Color", glm::value_ptr(highSkyColor));
+        }
+
+        /*IMGUI ORC*/
+
+            if (ImGui::CollapsingHeader("Orc")){
+                ImGui::SeparatorText("Orc");
+                ImGui::DragFloat3( "Orc Position", glm::value_ptr( orcModel.transform.position ), 0.05f );
+                ImGui::SliderFloat( "Orc Rotation", &orcModel.transform.rotationDegrees, 0.0f, 360.0f );   
+
+                ImGui::DragFloat("Orc Scale all", &orcModel.transform.uniformScale, 0.05f );
+                ImGui::DragFloat3( "Orc Scale xyz", glm::value_ptr( orcModel.transform.scale), 0.05f );  
+            }
         
+        /*IMGUI POINTLIGHTS*/
+
+            if (ImGui::CollapsingHeader("PointLights")){
+                for (std::size_t i = 0; i < pointLights.size(); ++i)
+                {
+                    PointLight& light = pointLights[i];
+                    ImGui::PushID( static_cast<int>(i) );
+                    
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(.68, .68, .68, 1)); // Set text color 
+                    ImGui::Text( "Point Light %zu", i );
+                    ImGui::PopStyleColor();
+
+                    ImGui::DragFloat3( "Position", glm::value_ptr(light.position), 0.1f ); ImGui::ColorEdit3( "Color", glm::value_ptr(light.color) );
+                    ImGui::SliderFloat( "Intensity", &light.intensity, 0.0f, 50.0f );
+                    ImGui::SliderFloat( "Radius", &light.radius, 0.1f, 50.0f );
+                    ImGui::Separator();
+
+                    ImGui::PopID();
+                }
+            }
+
+            if(showImGuiDemo){
+                ImGui::ShowDemoWindow();
+            }
+
+            ImGui::End();
+
+            ////// TESTING JUNK BEGIN should go into new sun struct///////
+
+            sun.direction = CalculateSunDirection(sunDir);
+            skyColor = glm::mix( lowSkyColor, highSkyColor, sunDir.elevation/90.0f);
+
+            glClearColor( skyColor.r, skyColor.g, skyColor.b, 1.0f );
+            ////// TESTING JUNK END /////////////////////////////////////
+
     // Camera state
             ProcessCameraInput( window, deltaTime, camera);
 
@@ -1905,7 +2019,7 @@ int main()
             objectA.transform.rotationDegrees += 50.0f * deltaTime;
             objectB.transform.rotationDegrees += 50.0f * deltaTime;
             objectD.transform.position = glm::vec3( pointLights[1].position.x, pointLightB.position.y, pointLights[1].position.z );
-            orcModel.transform.rotationDegrees += 25.0f * deltaTime;
+            //orcModel.transform.rotationDegrees += 25.0f * deltaTime;
 
 // -------------------------------------------------
 // DERIVE FRAME DATA
@@ -1915,7 +2029,7 @@ int main()
             const glm::vec3 cameraUp = glm::normalize( glm::cross( cameraRight, cameraForward ) );
 
             // Runtime grass spawning
-            const bool gIsDown = glfwGetKey(window, GLFW_KEY_G) == GLFW_PRESS;
+            const bool gIsDown = !io.WantCaptureMouse && glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
 
             if (gIsDown && !gWasDown)
             {
@@ -1933,6 +2047,7 @@ int main()
                         {
                             spawnPosition,
                             glm::vec3(size),
+                            1.0f,
 
                             0.0f,
                             glm::vec3(0.0f, 1.0f, 0.0f)
@@ -1940,9 +2055,10 @@ int main()
                     }
                 );
             }
+            
             gWasDown = gIsDown; // if button is still down gWasDown stays true prevent repeated spawns per the if check
 
-            const bool rIsDown = glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS;
+            const bool rIsDown = !io.WantCaptureKeyboard && glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS;
             if (rIsDown && !rWasDown)
             {
                 if (!transparentScene.empty())
@@ -1963,6 +2079,7 @@ int main()
                     transparentScene.erase(nearest);
                 }
             }
+            
             rWasDown = rIsDown;
 
             glfwGetFramebufferSize( window, &framebufferWidth, &framebufferHeight );
@@ -1984,11 +2101,14 @@ int main()
 // -------------------------------------------------
 // FRAME-WIDE UNIFORMS
 // -------------------------------------------------
-            
+            //mVP UNIFORMS
             glUniformMatrix4fv( uniforms.view, 1, GL_FALSE, glm::value_ptr(view) );
             glUniformMatrix4fv( uniforms.projection, 1, GL_FALSE, glm::value_ptr(projection) );
+
+            //CAMERA UNIFORMS
             glUniform3fv( uniforms.cameraPosition, 1, glm::value_ptr(camera.position) );
 
+            //POINTLIGHT UNIFORMS
             const int activePointLightCount = static_cast<int>( std::min<std::size_t>( pointLights.size(), MAX_POINT_LIGHTS ) );
             
             glUniform1i( uniforms.pointLightCount, activePointLightCount );
@@ -2006,6 +2126,7 @@ int main()
                 glUniform1f( locations.radius, light.radius );
             }
 
+            //SUNLIGHT UNIFORMS
             glUniform3fv( uniforms.sun.direction, 1, glm::value_ptr(sun.direction) );
             glUniform3fv( uniforms.sun.color, 1, glm::value_ptr(sun.color) );
             glUniform1f( uniforms.sun.intensity, sun.intensity );
@@ -2034,7 +2155,7 @@ int main()
             std::sort(
                 transparentScene.begin(),
                 transparentScene.end(),
-
+                //this c++ stuff here makes no sense study this make it make more sense, its like similar to a javascript inline function  ()=>{}
                 [&camera]
                 ( const Renderable& a, const Renderable& b )
                 {
@@ -2074,7 +2195,7 @@ int main()
 
         glDeleteProgram(shaderProgram);
     } //SCOPE END 
-        // Mesh / Texture RAII destruction triggered here
+    // Mesh / Texture RAII destruction triggered here
 
     glfwDestroyWindow(window);
     glfwTerminate();
